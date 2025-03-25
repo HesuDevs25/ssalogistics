@@ -6,14 +6,16 @@ import { useRouter } from "next/navigation";
 
 export default function StaffDashboardPage() {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState("pending");
+  const [activeTab, setActiveTab] = useState("agents");
   const [documents, setDocuments] = useState([]);
+  const [agents, setAgents] = useState([]);
+  const [selectedAgent, setSelectedAgent] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [user, setUser] = useState(null);
 
-  // Check user authentication and fetch documents
+  // Check user authentication and fetch data
   useEffect(() => {
-    const checkUserAndFetchDocuments = async () => {
+    const checkUserAndFetchData = async () => {
       try {
         // Check if user is staff
         const { data: { user }, error: authError } = await supabase.auth.getUser();
@@ -36,7 +38,7 @@ export default function StaffDashboardPage() {
         }
 
         setUser({ ...user, profile });
-        await fetchDocuments();
+        await fetchAgents();
       } catch (error) {
         console.error('Error checking user:', error);
         router.push('/portal');
@@ -45,16 +47,17 @@ export default function StaffDashboardPage() {
       }
     };
 
-    checkUserAndFetchDocuments();
+    checkUserAndFetchData();
   }, [router]);
 
-  const fetchDocuments = async () => {
+  const fetchAgents = async () => {
     try {
       const { data: docs, error } = await supabaseAdmin
         .from('documents')
         .select(`
           *,
-          profiles (
+          profiles!inner (
+            id,
             name,
             email
           )
@@ -66,9 +69,32 @@ export default function StaffDashboardPage() {
         return;
       }
 
-      setDocuments(docs || []);
+      // Group documents by agent and calculate counts
+      const agentMap = new Map();
+      docs.forEach(doc => {
+        const agentId = doc.profiles.id;
+        if (!agentMap.has(agentId)) {
+          agentMap.set(agentId, {
+            id: agentId,
+            name: doc.profiles.name,
+            email: doc.profiles.email,
+            documents: [],
+            counts: {
+              pending: 0,
+              verified: 0,
+              rejected: 0
+            }
+          });
+        }
+        const agent = agentMap.get(agentId);
+        agent.documents.push(doc);
+        agent.counts[doc.status]++;
+      });
+
+      setAgents(Array.from(agentMap.values()));
+      setDocuments(docs);
     } catch (error) {
-      console.error('Error fetching documents:', error);
+      console.error('Error fetching agents:', error);
     }
   };
 
@@ -85,6 +111,26 @@ export default function StaffDashboardPage() {
       setDocuments(documents.map(doc => 
         doc.id === documentId ? { ...doc, status: newStatus } : doc
       ));
+
+      // Update agent counts
+      setAgents(agents.map(agent => {
+        const doc = agent.documents.find(d => d.id === documentId);
+        if (doc) {
+          const oldStatus = doc.status;
+          return {
+            ...agent,
+            counts: {
+              ...agent.counts,
+              [oldStatus]: agent.counts[oldStatus] - 1,
+              [newStatus]: agent.counts[newStatus] + 1
+            },
+            documents: agent.documents.map(d => 
+              d.id === documentId ? { ...d, status: newStatus } : d
+            )
+          };
+        }
+        return agent;
+      }));
 
       // Send notification to user
       const doc = documents.find(d => d.id === documentId);
@@ -147,108 +193,183 @@ export default function StaffDashboardPage() {
           <div className="border-b">
             <nav className="flex space-x-8 px-6">
               <button
-                onClick={() => setActiveTab("pending")}
+                onClick={() => setActiveTab("agents")}
                 className={`py-4 px-1 border-b-2 font-medium text-sm ${
-                  activeTab === "pending"
+                  activeTab === "agents"
                     ? "border-blue-900 text-blue-900"
                     : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
                 }`}
               >
-                Pending
+                Agents
               </button>
-              <button
-                onClick={() => setActiveTab("verified")}
-                className={`py-4 px-1 border-b-2 font-medium text-sm ${
-                  activeTab === "verified"
-                    ? "border-blue-900 text-blue-900"
-                    : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
-                }`}
-              >
-                Verified
-              </button>
-              <button
-                onClick={() => setActiveTab("rejected")}
-                className={`py-4 px-1 border-b-2 font-medium text-sm ${
-                  activeTab === "rejected"
-                    ? "border-blue-900 text-blue-900"
-                    : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
-                }`}
-              >
-                Rejected
-              </button>
+              {selectedAgent && (
+                <button
+                  onClick={() => setActiveTab("documents")}
+                  className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                    activeTab === "documents"
+                      ? "border-blue-900 text-blue-900"
+                      : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+                  }`}
+                >
+                  {selectedAgent.name}'s Documents
+                </button>
+              )}
             </nav>
           </div>
         </div>
 
-        {/* Documents Table */}
+        {/* Content Area */}
         <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">Agent</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">Document</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">Type</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">Uploaded</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {documents
-                .filter(doc => doc.status === activeTab)
-                .map((doc) => (
-                  <tr key={doc.id}>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-medium text-gray-900">{doc.profiles?.name || 'Unknown User'}</div>
-                    </td>
+          {activeTab === "agents" ? (
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">Agent</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">Pending</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">Verified</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">Rejected</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {agents.map((agent) => (
+                  <tr key={agent.id}>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center">
                         <div className="flex-shrink-0 h-10 w-10">
-                          <svg className="h-10 w-10 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                          </svg>
+                          <div className="h-10 w-10 rounded-full bg-gray-200 flex items-center justify-center">
+                            <span className="text-gray-700 text-lg">
+                              {agent.name.charAt(0).toUpperCase()}
+                            </span>
+                          </div>
                         </div>
                         <div className="ml-4">
-                          <div className="text-sm font-medium text-gray-900">{doc.name}</div>
-                          <div className="text-sm text-gray-500">{doc.type.toUpperCase()} • {doc.size}</div>
+                          <div className="text-sm font-medium text-gray-900">{agent.name}</div>
+                          <div className="text-sm text-gray-500">{agent.email}</div>
                         </div>
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="text-sm text-gray-900">
-                        {doc.type.charAt(0).toUpperCase() + doc.type.slice(1)}
+                      <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800">
+                        {agent.counts.pending}
                       </span>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {new Date(doc.created_at).toLocaleDateString()}
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
+                        {agent.counts.verified}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">
+                        {agent.counts.rejected}
+                      </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                       <button
-                        className="text-blue-900 hover:text-blue-800 mr-4"
-                        onClick={() => window.open(doc.file_url, '_blank')}
+                        onClick={() => {
+                          setSelectedAgent(agent);
+                          setActiveTab("documents");
+                        }}
+                        className="text-blue-900 hover:text-blue-800"
                       >
-                        View
+                        View Documents
                       </button>
-                      {activeTab === "pending" && (
-                        <>
-                          <button
-                            className="text-green-900 hover:text-green-800 mr-4"
-                            onClick={() => handleStatusChange(doc.id, "verified")}
-                          >
-                            Verify
-                          </button>
-                          <button
-                            className="text-red-900 hover:text-red-800"
-                            onClick={() => handleStatusChange(doc.id, "rejected")}
-                          >
-                            Reject
-                          </button>
-                        </>
-                      )}
                     </td>
                   </tr>
                 ))}
-            </tbody>
-          </table>
+              </tbody>
+            </table>
+          ) : (
+            <div>
+              <div className="px-6 py-4 border-b">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-lg font-medium text-gray-900">
+                    {selectedAgent.name}'s Documents
+                  </h2>
+                  <button
+                    onClick={() => {
+                      setSelectedAgent(null);
+                      setActiveTab("agents");
+                    }}
+                    className="text-sm text-gray-500 hover:text-gray-700"
+                  >
+                    Back to Agents
+                  </button>
+                </div>
+              </div>
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">Document</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">Type</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">Status</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">Uploaded</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {selectedAgent.documents.map((doc) => (
+                    <tr key={doc.id}>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="flex items-center">
+                          <div className="flex-shrink-0 h-10 w-10">
+                            <svg className="h-10 w-10 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                            </svg>
+                          </div>
+                          <div className="ml-4">
+                            <div className="text-sm font-medium text-gray-900">{doc.name}</div>
+                            <div className="text-sm text-gray-500">{doc.type.toUpperCase()} • {doc.size}</div>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className="text-sm text-gray-900">
+                          {doc.type.charAt(0).toUpperCase() + doc.type.slice(1)}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                          doc.status === 'verified' ? 'bg-green-100 text-green-800' :
+                          doc.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                          'bg-red-100 text-red-800'
+                        }`}>
+                          {doc.status.charAt(0).toUpperCase() + doc.status.slice(1)}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {new Date(doc.created_at).toLocaleDateString()}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                        <button
+                          className="text-blue-900 hover:text-blue-800 mr-4"
+                          onClick={() => window.open(doc.file_url, '_blank')}
+                        >
+                          View
+                        </button>
+                        {doc.status === "pending" && (
+                          <>
+                            <button
+                              className="text-green-900 hover:text-green-800 mr-4"
+                              onClick={() => handleStatusChange(doc.id, "verified")}
+                            >
+                              Verify
+                            </button>
+                            <button
+                              className="text-red-900 hover:text-red-800"
+                              onClick={() => handleStatusChange(doc.id, "rejected")}
+                            >
+                              Reject
+                            </button>
+                          </>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       </main>
     </div>

@@ -1,5 +1,4 @@
 "use client";
-
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
@@ -10,18 +9,18 @@ export default function VerifyPage() {
   const [email, setEmail] = useState("");
   const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
-    const checkUser = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        router.push('/portal');
-      } else {
-        setEmail(user.email);
-        setIsLoading(false);
-      }
-    };
-    checkUser();
-  }, [router]);
+  // useEffect(() => {
+  //   const checkUser = async () => {
+  //     const { data: { user } } = await supabase.auth.getUser();
+  //     if (!user) {
+  //       router.push('/portal');
+  //     } else {
+  //       setEmail(user.email);
+  //       setIsLoading(false);
+  //     }
+  //   };
+  //   checkUser();
+  // }, [router]);
 
   if (isLoading) {
     return (
