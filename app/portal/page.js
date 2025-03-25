@@ -136,6 +136,7 @@ export default function PortalPage() {
   };
 
   const handleRegistration = async (formData) => {
+    setIsLoading(true);
     try {
       if (formData.password !== formData.confirmPassword) {
         setError("Passwords do not match. Please check and try again.");
@@ -190,6 +191,8 @@ export default function PortalPage() {
     } catch (error) {
       console.error('Registration process error:', error);
       setError("An unexpected error occurred. Please try again.");
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -423,11 +426,16 @@ export default function PortalPage() {
                 >
                   <span className="absolute inset-0 bg-gradient-to-r from-blue-600 to-blue-800 rounded-md z-0"></span>
                   <span className="relative z-10 flex items-center justify-center">
-                    {isLoading
-                      ? "Processing..."
-                      : isLogin
-                      ? "Sign In"
-                      : "Create Account"}
+                    {isLoading ? (
+                      <div className="flex items-center">
+                        <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent mr-2"></div>
+                        <span>Processing...</span>
+                      </div>
+                    ) : isLogin ? (
+                      "Sign In"
+                    ) : (
+                      "Create Account"
+                    )}
                   </span>
                 </button>
               </form>

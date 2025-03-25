@@ -80,23 +80,11 @@ export default function DashboardPage() {
     try {
       setIsLoading(true);
 
-      // Check if bucket exists and is accessible
-      const { data: buckets, error: bucketError } = await supabase
-        .storage
-        .listBuckets();
-
-      if (bucketError) {
-        throw new Error('Unable to access storage. Please contact support.');
-      }
-
-      const documentsBucket = buckets.find(b => b.name === 'documents');
-      if (!documentsBucket) {
-        throw new Error('Storage not properly configured. Please contact support.');
-      }
-
       // Upload file to Supabase Storage
       const fileExt = file.name.split('.').pop();
       const fileName = `${user.id}/${selectedDocType}/${Date.now()}.${fileExt}`;
+      
+      console.log('Attempting to upload file:', fileName);
       const { error: uploadError } = await supabase.storage
         .from('documents')
         .upload(fileName, file, {
@@ -105,18 +93,22 @@ export default function DashboardPage() {
         });
 
       if (uploadError) {
-        throw uploadError;
+        console.error('Upload error details:', uploadError);
+        throw new Error(`Upload failed: ${uploadError.message}`);
       }
 
+      console.log('File uploaded successfully, getting public URL');
       // Get public URL
       const { data: { publicUrl }, error: urlError } = supabase.storage
         .from('documents')
         .getPublicUrl(fileName);
 
       if (urlError) {
-        throw urlError;
+        console.error('URL error details:', urlError);
+        throw new Error(`Failed to get public URL: ${urlError.message}`);
       }
 
+      console.log('Creating document record in database');
       // Create document record in database
       const { data: doc, error: dbError } = await supabase
         .from('documents')
@@ -134,7 +126,10 @@ export default function DashboardPage() {
         .select()
         .single();
 
-      if (dbError) throw dbError;
+      if (dbError) {
+        console.error('Database error details:', dbError);
+        throw new Error(`Failed to create document record: ${dbError.message}`);
+      }
 
       // Send notification to staff
       await supabase
