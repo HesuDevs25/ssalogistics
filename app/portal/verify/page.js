@@ -1,37 +1,9 @@
 "use client";
 import Link from "next/link";
-import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
-import { useRouter } from "next/navigation";
+
 
 export default function VerifyPage() {
-  const router = useRouter();
-  const [email, setEmail] = useState("");
-  const [isLoading, setIsLoading] = useState(true);
-
-  useEffect(() => {
-    const checkUser = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        router.push('/portal');
-      } else {
-        setEmail(user.email);
-        setIsLoading(false);
-      }
-    };
-    checkUser();
-  }, [router]);
-
-  if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-900 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading...</p>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
@@ -39,12 +11,7 @@ export default function VerifyPage() {
         <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
           Check your email
         </h2>
-        <p className="mt-2 text-center text-sm text-gray-600">
-          We&apos;ve sent a verification link to
-          <span className="font-medium text-blue-900"> {email}</span>
-        </p>
       </div>
-
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
         <div className="bg-white py-8 px-4 shadow sm:rounded-lg sm:px-10">
           <div className="space-y-6">
