@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background Circle -->
+  <circle cx="256" cy="256" r="240" fill="url(#gradient)" />
+  
+  <!-- Container Shape -->
+  <path d="M160 160h192v192H160z" fill="white" fill-opacity="0.1" />
+  <path d="M160 160h192v192H160z" stroke="white" stroke-width="8" stroke-linecap="round" stroke-linejoin="round" />
+  
+  <!-- SSA Letters -->
+  <path d="M200 200h80v40h-80z" fill="white" />
+  <path d="M200 260h80v40h-80z" fill="white" />
+  <path d="M200 320h80v40h-80z" fill="white" />
+  
+  <!-- Container Lines -->
+  <path d="M160 160l96 96" stroke="white" stroke-width="4" stroke-linecap="round" />
+  <path d="M352 160l-96 96" stroke="white" stroke-width="4" stroke-linecap="round" />
+  <path d="M160 352l96-96" stroke="white" stroke-width="4" stroke-linecap="round" />
+  <path d="M352 352l-96-96" stroke="white" stroke-width="4" stroke-linecap="round" />
+  
+  <!-- Gradient Definition -->
+  <defs>
+    <linearGradient id="gradient" x1="0" y1="0" x2="512" y2="512" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#2563EB" />
+      <stop offset="100%" stop-color="#1E40AF" />
+    </linearGradient>
+  </defs>
+</svg> 
