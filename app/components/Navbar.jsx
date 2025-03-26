@@ -95,7 +95,7 @@ export default function Navbar() {
 
           {/* Authentication/Portal Button */}
           <div className="hidden md:block">
-            <Link 
+            {/* <Link 
               href="/portal" 
               className={`relative inline-flex items-center px-6 py-2 rounded-md text-white transition group overflow-hidden ${
                 isActive("/portal") ? "ring-2 ring-blue-400" : ""
@@ -109,7 +109,7 @@ export default function Navbar() {
                 </svg>
                 Document Portal
               </span>
-            </Link>
+            </Link> */}
           </div>
 
           {/* Mobile Menu Button */}
@@ -163,7 +163,7 @@ export default function Navbar() {
                 }`}></span>
               </Link>
             ))}
-            <Link
+            {/* <Link
               href="/portal"
               className={`relative inline-flex items-center justify-center w-full px-4 py-2 rounded-md text-white transition group overflow-hidden ${
                 isActive("/portal") ? "ring-2 ring-blue-400" : ""
@@ -178,7 +178,7 @@ export default function Navbar() {
                 </svg>
                 Document Portal
               </span>
-            </Link>
+            </Link> */}
           </div>
         </div>
       </div>
