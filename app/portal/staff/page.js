@@ -4,161 +4,290 @@ import { supabase } from "@/lib/supabase";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { useRouter } from "next/navigation";
 
-export default function StaffDashboardPage() {
+export default function StaffDashboard() {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState("agents");
-  const [documents, setDocuments] = useState([]);
-  const [agents, setAgents] = useState([]);
-  const [selectedAgent, setSelectedAgent] = useState(null);
+  const [activeTab, setActiveTab] = useState("activationRequests");
   const [isLoading, setIsLoading] = useState(true);
-  const [user, setUser] = useState(null);
+  const [users, setUsers] = useState([]);
+  const [activationRequests, setActivationRequests] = useState([]);
+  const [staff, setStaff] = useState(null);
+  const [rejectReason, setRejectReason] = useState("");
+  const [showRejectModal, setShowRejectModal] = useState(false);
+  const [selectedRequest, setSelectedRequest] = useState(null);
+  const [stats, setStats] = useState({
+    totalAgents: 0,
+    verifiedDocs: 0,
+    pendingDocs: 0,
+    pendingActivations: 0,
+    rejectedDocs: 0
+  });
+  const [recentActivities, setRecentActivities] = useState([]);
 
-  // Check user authentication and fetch data
+  // Check if user is staff
   useEffect(() => {
-    const checkUserAndFetchData = async () => {
+    const checkStaffAccess = async () => {
       try {
-        // Check if user is staff
-        const { data: { user }, error: authError } = await supabase.auth.getUser();
-        if (authError || !user) {
-          console.error('Auth error:', authError);
+        setIsLoading(true);
+        
+        const { data: { user }, error } = await supabase.auth.getUser();
+        if (error || !user) {
           router.push('/portal');
           return;
         }
 
-        const { data: profile, error: profileError } = await supabase
+        // Check if user has staff role
+        const { data: profile, error: profileError } = await supabaseAdmin
           .from('profiles')
-          .select('role')
+          .select('*')
           .eq('id', user.id)
           .single();
 
-        if (profileError || profile?.role !== 'staff') {
-          console.error('Profile error:', profileError);
+        if (profileError || !profile || profile.role !== 'staff') {
+          console.error('Not authorized as staff:', profileError);
           router.push('/portal');
           return;
         }
 
-        setUser({ ...user, profile });
-        await fetchAgents();
+        setStaff(profile);
+        await fetchUsers();
+        await fetchActivationRequests();
+        await fetchDashboardData();
       } catch (error) {
-        console.error('Error checking user:', error);
+        console.error('Error checking staff access:', error);
         router.push('/portal');
       } finally {
         setIsLoading(false);
       }
     };
 
-    checkUserAndFetchData();
+    checkStaffAccess();
   }, [router]);
 
-  const fetchAgents = async () => {
+  const fetchUsers = async () => {
     try {
-      const { data: docs, error } = await supabaseAdmin
-        .from('documents')
+      const { data, error } = await supabaseAdmin
+        .from('profiles')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Error fetching users:', error);
+        return;
+      }
+
+      setUsers(data || []);
+    } catch (error) {
+      console.error('Error fetching users:', error);
+    }
+  };
+
+  const fetchActivationRequests = async () => {
+    try {
+      // Join with profiles to get user details
+      const { data, error } = await supabaseAdmin
+        .from('account_activation_requests')
         .select(`
           *,
-          profiles!inner (
+          profiles:user_id (
             id,
-            name,
-            email
+            email,
+            name
           )
         `)
         .order('created_at', { ascending: false });
 
       if (error) {
-        console.error('Error fetching documents:', error);
+        console.error('Error fetching activation requests:', error);
         return;
       }
 
-      // Group documents by agent and calculate counts
-      const agentMap = new Map();
-      docs.forEach(doc => {
-        const agentId = doc.profiles.id;
-        if (!agentMap.has(agentId)) {
-          agentMap.set(agentId, {
-            id: agentId,
-            name: doc.profiles.name,
-            email: doc.profiles.email,
-            documents: [],
-            counts: {
-              pending: 0,
-              verified: 0,
-              rejected: 0
-            }
-          });
-        }
-        const agent = agentMap.get(agentId);
-        agent.documents.push(doc);
-        agent.counts[doc.status]++;
-      });
-
-      setAgents(Array.from(agentMap.values()));
-      setDocuments(docs);
+      setActivationRequests(data || []);
     } catch (error) {
-      console.error('Error fetching agents:', error);
+      console.error('Error fetching activation requests:', error);
     }
   };
 
-  const handleStatusChange = async (documentId, newStatus) => {
+  const fetchDashboardData = async () => {
     try {
-      const { error } = await supabaseAdmin
-        .from('documents')
-        .update({ status: newStatus })
-        .eq('id', documentId);
+      setIsLoading(true);
 
-      if (error) throw error;
-
-      // Update local state
-      setDocuments(documents.map(doc => 
-        doc.id === documentId ? { ...doc, status: newStatus } : doc
-      ));
-
-      // Update agent counts
-      setAgents(agents.map(agent => {
-        const doc = agent.documents.find(d => d.id === documentId);
-        if (doc) {
-          const oldStatus = doc.status;
-          return {
-            ...agent,
-            counts: {
-              ...agent.counts,
-              [oldStatus]: agent.counts[oldStatus] - 1,
-              [newStatus]: agent.counts[newStatus] + 1
-            },
-            documents: agent.documents.map(d => 
-              d.id === documentId ? { ...d, status: newStatus } : d
+      // Fetch data first, then count
+      const [
+        { data: customers },
+        { data: verifiedDocs },
+        { data: pendingDocs },
+        { data: pendingActivations },
+        { data: rejectedDocs },
+        { data: activities }
+      ] = await Promise.all([
+        supabaseAdmin.from('profiles').select('*').eq('role', 'customer'),
+        supabaseAdmin.from('documents').select('*').eq('status', 'verified'),
+        supabaseAdmin.from('documents').select('*').eq('status', 'pending'),
+        supabaseAdmin.from('account_activation_requests').select('*').eq('status', 'pending'),
+        supabaseAdmin.from('documents').select('*').eq('status', 'rejected'),
+        supabaseAdmin
+          .from('documents')
+          .select(`
+            *,
+            profiles:user_id (
+              id,
+              name,
+              email,
+              role
             )
-          };
-        }
-        return agent;
-      }));
+          `)
+          .eq('profiles.role', 'customer')
+          .order('created_at', { ascending: false })
+          .limit(5)
+      ]);
 
-      // Send notification to user
-      const doc = documents.find(d => d.id === documentId);
-      if (doc) {
-        await supabaseAdmin
-          .from('notifications')
-          .insert([
-            {
-              type: 'document_status',
-              title: 'Document Status Updated',
-              message: `Your document "${doc.name}" has been ${newStatus}`,
-              recipient_email: doc.profiles.email,
-              document_id: doc.id,
-            },
-          ]);
-      }
+      setStats({
+        totalAgents: customers?.length || 0,
+        verifiedDocs: verifiedDocs?.length || 0,
+        pendingDocs: pendingDocs?.length || 0,
+        pendingActivations: pendingActivations?.length || 0,
+        rejectedDocs: rejectedDocs?.length || 0
+      });
+
+      setRecentActivities(activities || []);
     } catch (error) {
-      console.error('Error updating document status:', error);
-      alert('Failed to update document status');
+      console.error('Error fetching dashboard data:', error);
+    } finally {
+      setIsLoading(false);
     }
+  };
+
+  const handleApproveRequest = async (requestId, userId) => {
+    try {
+      setIsLoading(true);
+
+      // Update activation request status
+      const { error: requestError } = await supabaseAdmin
+        .from('account_activation_requests')
+        .update({
+          status: 'approved',
+          reviewed_by: staff.id,
+          reviewed_at: new Date().toISOString(),
+          notes: 'Account activation approved'
+        })
+        .eq('id', requestId);
+
+      if (requestError) {
+        console.error('Error updating activation request:', requestError);
+        throw new Error('Failed to approve request');
+      }
+
+      // Update user profile status
+      const { error: profileError } = await supabaseAdmin
+        .from('profiles')
+        .update({ account_status: 'active' })
+        .eq('id', userId);
+
+      if (profileError) {
+        console.error('Error updating user profile:', profileError);
+        throw new Error('Failed to activate user account');
+      }
+
+      // Create notification for user
+      await supabaseAdmin
+        .from('notifications')
+        .insert([{
+          type: 'account_activation',
+          title: 'Account Activation Approved',
+          message: 'Your account has been activated. You now have full access to all features.',
+          recipient_id: userId
+        }]);
+
+      // Refresh data
+      await fetchActivationRequests();
+      await fetchUsers();
+
+      alert('Account activation approved successfully');
+    } catch (error) {
+      console.error('Error approving request:', error);
+      alert(error.message || 'Failed to approve request');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const openRejectModal = (request) => {
+    setSelectedRequest(request);
+    setRejectReason("");
+    setShowRejectModal(true);
+  };
+
+  const handleRejectRequest = async () => {
+    if (!selectedRequest || !rejectReason.trim()) {
+      alert('Please provide a reason for rejection');
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+
+      // Update activation request status
+      const { error: requestError } = await supabaseAdmin
+        .from('account_activation_requests')
+        .update({
+          status: 'rejected',
+          reviewed_by: staff.id,
+          reviewed_at: new Date().toISOString(),
+          notes: rejectReason.trim()
+        })
+        .eq('id', selectedRequest.id);
+
+      if (requestError) {
+        console.error('Error updating activation request:', requestError);
+        throw new Error('Failed to reject request');
+      }
+
+      // Create notification for user
+      await supabaseAdmin
+        .from('notifications')
+        .insert([{
+          type: 'account_activation',
+          title: 'Account Activation Rejected',
+          message: `Your account activation request was rejected. Reason: ${rejectReason.trim()}`,
+          recipient_id: selectedRequest.user_id
+        }]);
+
+      // Refresh data
+      await fetchActivationRequests();
+
+      setShowRejectModal(false);
+      alert('Account activation rejected successfully');
+    } catch (error) {
+      console.error('Error rejecting request:', error);
+      alert(error.message || 'Failed to reject request');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const viewDocuments = (request) => {
+    // Open authorization letter and ID in new tabs
+    window.open(supabaseAdmin.storage.from('verification-docs').getPublicUrl(request.auth_letter_path).data.publicUrl, '_blank');
+    window.open(supabaseAdmin.storage.from('verification-docs').getPublicUrl(request.id_document_path).data.publicUrl, '_blank');
   };
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-100">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-900 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading...</p>
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="bg-white p-8 rounded-lg shadow-md">
+          <h2 className="text-xl font-semibold mb-4">Loading...</h2>
+          <div className="animate-pulse flex space-x-4">
+            <div className="flex-1 space-y-6 py-1">
+              <div className="h-2 bg-slate-200 rounded"></div>
+              <div className="space-y-3">
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="h-2 bg-slate-200 rounded col-span-2"></div>
+                  <div className="h-2 bg-slate-200 rounded col-span-1"></div>
+                </div>
+                <div className="h-2 bg-slate-200 rounded"></div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     );
@@ -166,32 +295,147 @@ export default function StaffDashboardPage() {
 
   return (
     <div className="min-h-screen bg-gray-100">
-      {/* Header */}
-      <header className="bg-white shadow-sm">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex justify-between items-center">
-            <h1 className="text-2xl font-bold text-blue-900">Staff Dashboard</h1>
-            <div className="flex items-center space-x-4">
-              <button 
-                onClick={() => router.push('/portal')}
-                className="flex items-center px-4 py-2 text-sm font-medium text-white bg-blue-900 rounded-md hover:bg-blue-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-200"
-              >
-                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-                </svg>
-                Back to Portal
-              </button>
-            </div>
-          </div>
+      <header className="bg-white shadow">
+        <div className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8 flex justify-between items-center">
+          <h1 className="text-2xl font-bold text-gray-900">Staff Dashboard</h1>
+          <button
+            onClick={async () => {
+              await supabase.auth.signOut();
+              router.push('/portal');
+            }}
+            className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"
+          >
+            Logout
+          </button>
         </div>
       </header>
 
-      {/* Main Content */}
-      <main className="container mx-auto px-4 py-8">
-        {/* Tabs */}
-        <div className="bg-white rounded-lg shadow-sm mb-8">
-          <div className="border-b">
-            <nav className="flex space-x-8 px-6">
+      <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+        {/* Stats Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+          {/* Total Customers Card */}
+          <div className="bg-white rounded-lg shadow p-6">
+            <div className="flex items-center">
+              <div className="p-3 rounded-full bg-blue-100">
+                <svg className="h-6 w-6 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                </svg>
+              </div>
+              <div className="ml-4">
+                <p className="text-sm font-medium text-gray-500">Total Customers</p>
+                <p className="text-2xl font-semibold text-gray-900">{stats.totalAgents}</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Pending Documents Card */}
+          <div className="bg-white rounded-lg shadow p-6">
+            <div className="flex items-center">
+              <div className="p-3 rounded-full bg-yellow-100">
+                <svg className="h-6 w-6 text-yellow-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+              </div>
+              <div className="ml-4">
+                <p className="text-sm font-medium text-gray-500">Pending Documents</p>
+                <p className="text-2xl font-semibold text-gray-900">{stats.pendingDocs}</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Verified Documents Card */}
+          <div className="bg-white rounded-lg shadow p-6">
+            <div className="flex items-center">
+              <div className="p-3 rounded-full bg-green-100">
+                <svg className="h-6 w-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <div className="ml-4">
+                <p className="text-sm font-medium text-gray-500">Verified Documents</p>
+                <p className="text-2xl font-semibold text-gray-900">{stats.verifiedDocs}</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Pending Activations Card */}
+          <div className="bg-white rounded-lg shadow p-6">
+            <div className="flex items-center">
+              <div className="p-3 rounded-full bg-purple-100">
+                <svg className="h-6 w-6 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+                </svg>
+              </div>
+              <div className="ml-4">
+                <p className="text-sm font-medium text-gray-500">Pending Activations</p>
+                <p className="text-2xl font-semibold text-gray-900">{stats.pendingActivations}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Recent Activities */}
+        <div className="bg-white shadow rounded-lg mb-8">
+          <div className="px-6 py-4 border-b border-gray-200">
+            <h3 className="text-lg font-medium text-gray-900">Recent Activities</h3>
+          </div>
+          <div className="divide-y divide-gray-200">
+            {recentActivities.map((activity) => (
+              <div key={activity.id} className="px-6 py-4">
+                <div className="flex items-center">
+                  <div className={`p-2 rounded-full ${
+                    activity.status === 'verified' ? 'bg-green-100' :
+                    activity.status === 'pending' ? 'bg-yellow-100' :
+                    'bg-red-100'
+                  }`}>
+                    <svg className={`h-5 w-5 ${
+                      activity.status === 'verified' ? 'text-green-600' :
+                      activity.status === 'pending' ? 'text-yellow-600' :
+                      'text-red-600'
+                    }`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                  </div>
+                  <div className="ml-4">
+                    <p className="text-sm font-medium text-gray-900">
+                      {activity.profiles?.name || 'Unknown User'} - {activity.document_type}
+                    </p>
+                    <p className="text-sm text-gray-500">
+                      Status: <span className={`font-medium ${
+                        activity.status === 'verified' ? 'text-green-600' :
+                        activity.status === 'pending' ? 'text-yellow-600' :
+                        'text-red-600'
+                      }`}>
+                        {activity.status.charAt(0).toUpperCase() + activity.status.slice(1)}
+                      </span>
+                    </p>
+                    <p className="text-xs text-gray-400 mt-1">
+                      {new Date(activity.created_at).toLocaleString()}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            ))}
+            {recentActivities.length === 0 && (
+              <div className="px-6 py-4 text-center text-gray-500">
+                No recent activities found.
+              </div>
+            )}
+          </div>
+        </div>
+
+          <div className="border-b border-gray-200 mb-6">
+            <nav className="-mb-px flex space-x-8">
+              <button
+                onClick={() => setActiveTab("activationRequests")}
+                className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                  activeTab === "activationRequests"
+                    ? "border-blue-900 text-blue-900"
+                    : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+                }`}
+              >
+                Activation Requests
+              </button>
               <button
                 onClick={() => setActiveTab("agents")}
                 className={`py-4 px-1 border-b-2 font-medium text-sm ${
@@ -200,178 +444,213 @@ export default function StaffDashboardPage() {
                     : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
                 }`}
               >
-                Agents
+              Customers
               </button>
-              {selectedAgent && (
-                <button
-                  onClick={() => setActiveTab("documents")}
-                  className={`py-4 px-1 border-b-2 font-medium text-sm ${
-                    activeTab === "documents"
-                      ? "border-blue-900 text-blue-900"
-                      : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
-                  }`}
-                >
-                  {selectedAgent.name}&apos;s Documents
-                </button>
-              )}
             </nav>
           </div>
-        </div>
 
-        {/* Content Area */}
-        <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-          {activeTab === "agents" ? (
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">Agent</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">Pending</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">Verified</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">Rejected</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {agents.map((agent) => (
-                  <tr key={agent.id}>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center">
-                        <div className="flex-shrink-0 h-10 w-10">
-                          <div className="h-10 w-10 rounded-full bg-gray-200 flex items-center justify-center">
-                            <span className="text-gray-700 text-lg">
-                              {agent.name.charAt(0).toUpperCase()}
-                            </span>
-                          </div>
-                        </div>
-                        <div className="ml-4">
-                          <div className="text-sm font-medium text-gray-900">{agent.name}</div>
-                          <div className="text-sm text-gray-500">{agent.email}</div>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800">
-                        {agent.counts.pending}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
-                        {agent.counts.verified}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">
-                        {agent.counts.rejected}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                      <button
-                        onClick={() => {
-                          setSelectedAgent(agent);
-                          setActiveTab("documents");
-                        }}
-                        className="text-blue-900 hover:text-blue-800"
-                      >
-                        View Documents
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          ) : (
+          {activeTab === "activationRequests" && (
             <div>
-              <div className="px-6 py-4 border-b">
-                <div className="flex items-center justify-between">
-                  <h2 className="text-lg font-medium text-gray-900">
-                    {selectedAgent.name}&apos;s Documents
-                  </h2>
-                  <button
-                    onClick={() => {
-                      setSelectedAgent(null);
-                      setActiveTab("agents");
-                    }}
-                    className="text-sm text-gray-500 hover:text-gray-700"
-                  >
-                    Back to Agents
-                  </button>
-                </div>
-              </div>
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">Document</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">Type</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">Status</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">Uploaded</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {selectedAgent.documents.map((doc) => (
-                    <tr key={doc.id}>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center">
-                          <div className="flex-shrink-0 h-10 w-10">
-                            <svg className="h-10 w-10 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                            </svg>
+              <h2 className="text-xl font-bold text-blue-900 mb-4">Account Activation Requests</h2>
+              
+              {activationRequests.length > 0 ? (
+                <div className="bg-white shadow overflow-hidden rounded-md">
+                  <ul className="divide-y divide-gray-200">
+                    {activationRequests.map((request) => (
+                      <li key={request.id} className="px-6 py-4">
+                        <div className="flex items-center justify-between">
+                          <div className="flex flex-col">
+                            <div className="flex items-center">
+                              <h3 className="text-lg font-medium text-gray-900">{request.profiles.name || 'Unknown'}</h3>
+                              <span className={`ml-2 px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                                request.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                                request.status === 'approved' ? 'bg-green-100 text-green-800' :
+                                'bg-red-100 text-red-800'
+                              }`}>
+                                {request.status.charAt(0).toUpperCase() + request.status.slice(1)}
+                              </span>
+                            </div>
+                            <p className="text-sm text-gray-500">Email: {request.profiles.email}</p>
+                            <p className="text-sm text-gray-500">Company: {request.company_name}</p>
+                            <p className="text-sm text-gray-500">Submitted: {new Date(request.created_at).toLocaleString()}</p>
+                            
+                            {request.status !== 'pending' && (
+                              <div className="mt-2 p-2 border border-gray-200 rounded bg-gray-50">
+                                <p className="text-sm font-medium text-gray-700">Review Notes:</p>
+                                <p className="text-sm text-gray-600">{request.notes || 'No notes provided'}</p>
+                                <p className="text-xs text-gray-500 mt-1">
+                                  Reviewed on {new Date(request.reviewed_at).toLocaleString()}
+                                </p>
+                              </div>
+                            )}
                           </div>
-                          <div className="ml-4">
-                            <div className="text-sm font-medium text-gray-900">{doc.name}</div>
-                            <div className="text-sm text-gray-500">{doc.type.toUpperCase()} • {doc.size}</div>
-                          </div>
+                          
+                          {request.status === 'pending' && (
+                            <div className="flex space-x-2">
+                              <button
+                                onClick={() => viewDocuments(request)}
+                                className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700"
+                              >
+                                View Documents
+                              </button>
+                              <button
+                                onClick={() => handleApproveRequest(request.id, request.user_id)}
+                                className="px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700"
+                              >
+                                Approve
+                              </button>
+                              <button
+                                onClick={() => openRejectModal(request)}
+                                className="px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700"
+                              >
+                                Reject
+                              </button>
+                            </div>
+                          )}
                         </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="text-sm text-gray-900">
-                          {doc.type.charAt(0).toUpperCase() + doc.type.slice(1)}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                          doc.status === 'verified' ? 'bg-green-100 text-green-800' :
-                          doc.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                          'bg-red-100 text-red-800'
-                        }`}>
-                          {doc.status.charAt(0).toUpperCase() + doc.status.slice(1)}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {new Date(doc.created_at).toLocaleDateString()}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                        <button
-                          className="text-blue-900 hover:text-blue-800 mr-4"
-                          onClick={() => window.open(doc.file_url, '_blank')}
-                        >
-                          View
-                        </button>
-                        {doc.status === "pending" && (
-                          <>
-                            <button
-                              className="text-green-900 hover:text-green-800 mr-4"
-                              onClick={() => handleStatusChange(doc.id, "verified")}
-                            >
-                              Verify
-                            </button>
-                            <button
-                              className="text-red-900 hover:text-red-800"
-                              onClick={() => handleStatusChange(doc.id, "rejected")}
-                            >
-                              Reject
-                            </button>
-                          </>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : (
+                <div className="bg-white p-4 rounded-lg text-center">
+                  <p className="text-gray-500">No activation requests found.</p>
+                </div>
+              )}
             </div>
           )}
-        </div>
+
+          {activeTab === "agents" && (
+            <div>
+            <h2 className="text-xl font-bold text-blue-900 mb-4">All Customers</h2>
+              
+              {users.length > 0 ? (
+                <div className="bg-white shadow overflow-hidden rounded-md">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Name
+                        </th>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Email
+                        </th>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Phone
+                        </th>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Status
+                        </th>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Member Since
+                        </th>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Actions
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {users.map((user) => (
+                        <tr key={user.id}>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="text-sm font-medium text-gray-900">{user.name || 'N/A'}</div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="text-sm text-gray-500">{user.email}</div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="text-sm text-gray-500">{user.phone || 'N/A'}</div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                              user.account_status === 'active' ? 'bg-green-100 text-green-800' :
+                              user.account_status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                              'bg-red-100 text-red-800'
+                            }`}>
+                              {user.account_status ? user.account_status.charAt(0).toUpperCase() + user.account_status.slice(1) : 'Disabled'}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            {new Date(user.created_at).toLocaleDateString()}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                            <button
+                              onClick={() => {
+                                // View user details or activate/deactivate 
+                                // Implementation for additional actions
+                              }}
+                              className="text-blue-600 hover:text-blue-900"
+                            >
+                              View Details
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="bg-white p-4 rounded-lg text-center">
+                  <p className="text-gray-500">No users found.</p>
+                </div>
+              )}
+            </div>
+          )}
       </main>
+
+      {/* Reject Modal */}
+      {showRejectModal && (
+        <div className="fixed z-10 inset-0 overflow-y-auto">
+          <div className="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+            <div className="fixed inset-0 transition-opacity" aria-hidden="true">
+              <div className="absolute inset-0 bg-gray-500 opacity-75"></div>
+            </div>
+
+            <div className="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+              <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                <div className="sm:flex sm:items-start">
+                  <div className="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-red-100 sm:mx-0 sm:h-10 sm:w-10">
+                    <svg className="h-6 w-6 text-red-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                  </div>
+                  <div className="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left">
+                    <h3 className="text-lg leading-6 font-medium text-gray-900">Reject Activation Request</h3>
+                    <div className="mt-2">
+                      <p className="text-sm text-gray-500">
+                        Please provide a reason for rejection. This will be visible to the user.
+                      </p>
+                      <textarea
+                        className="mt-2 shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                        rows="4"
+                        placeholder="Enter reason for rejection..."
+                        value={rejectReason}
+                        onChange={(e) => setRejectReason(e.target.value)}
+                      ></textarea>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div className="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+                <button
+                  type="button"
+                  className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-red-600 text-base font-medium text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:ml-3 sm:w-auto sm:text-sm"
+                  onClick={handleRejectRequest}
+                >
+                  Reject
+                </button>
+                <button
+                  type="button"
+                  className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
+                  onClick={() => setShowRejectModal(false)}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 } 
