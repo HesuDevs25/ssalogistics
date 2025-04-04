@@ -1,31 +1,74 @@
-const [user, setUser] = useState(null);
-const [isLoading, setIsLoading] = useState(true);
-const [recentActivities, setRecentActivities] = useState([]);
-const [totalCustomers, setTotalCustomers] = useState(0);
-const [totalRequests, setTotalRequests] = useState(0);
-const [totalDocuments, setTotalDocuments] = useState(0);
+"use client";
+import { useState, useEffect, useCallback } from "react";
+import { supabase } from "@/lib/supabase";
+import { supabaseAdmin } from "@/lib/supabase-admin";
+import { useRouter } from "next/navigation";
 
-useEffect(() => {
-  const checkStaffAccess = async () => {
+export default function StaffDashboardPage() {
+  const router = useRouter();
+  const [isLoading, setIsLoading] = useState(true);
+  const [user, setUser] = useState(null);
+  const [pendingRequests, setPendingRequests] = useState(0);
+  const [pendingDocuments, setPendingDocuments] = useState(0);
+  const [totalAgents, setTotalAgents] = useState(0);
+
+  const fetchDashboardData = useCallback(async () => {
     try {
-      const { data: { user }, error: authError } = await supabase.auth.getUser();
-      if (authError || !user) {
+      // Fetch pending activation requests
+      const { data: requests, error: requestsError } = await supabaseAdmin
+        .from('account_activation_requests')
+        .select('*')
+        .eq('status', 'pending');
+
+      if (!requestsError) {
+        setPendingRequests(requests.length);
+      }
+
+      // Fetch pending documents
+      const { data: documents, error: documentsError } = await supabaseAdmin
+        .from('documents')
+        .select('*')
+        .eq('status', 'pending');
+
+      if (!documentsError) {
+        setPendingDocuments(documents.length);
+      }
+
+      // Fetch total agents
+      const { data: agents, error: agentsError } = await supabaseAdmin
+        .from('profiles')
+        .select('*')
+        .eq('role', 'customer');
+
+      if (!agentsError) {
+        setTotalAgents(agents.length);
+      }
+    } catch (error) {
+      console.error('Error fetching dashboard data:', error);
+    }
+  }, []);
+
+  const checkStaffAccess = useCallback(async () => {
+    try {
+      const { data: { user }, error } = await supabase.auth.getUser();
+      if (error || !user) {
         router.push('/portal');
         return;
       }
 
-      const { data: profile, error: profileError } = await supabase
+      const { data: profile, error: profileError } = await supabaseAdmin
         .from('profiles')
         .select('*')
         .eq('id', user.id)
         .single();
 
       if (profileError || !profile || profile.role !== 'staff') {
+        console.error('Not authorized as staff:', profileError);
         router.push('/portal');
         return;
       }
 
-      setUser({ ...user, profile });
+      setUser(profile);
       await fetchDashboardData();
     } catch (error) {
       console.error('Error checking staff access:', error);
@@ -33,31 +76,45 @@ useEffect(() => {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [router, fetchDashboardData]);
 
-  checkStaffAccess();
-}, [router]);
+  useEffect(() => {
+    checkStaffAccess();
+  }, [checkStaffAccess]);
 
-// Remove notifications tab from the UI
-<div className="flex space-x-4 mb-6">
-  <button
-    onClick={() => setActiveTab('overview')}
-    className={`px-4 py-2 rounded-md ${
-      activeTab === 'overview'
-        ? 'bg-blue-900 text-white'
-        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-    }`}
-  >
-    Overview
-  </button>
-  <button
-    onClick={() => setActiveTab('documents')}
-    className={`px-4 py-2 rounded-md ${
-      activeTab === 'documents'
-        ? 'bg-blue-900 text-white'
-        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-    }`}
-  >
-    Documents
-  </button>
-</div> 
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-100">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-900 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-100">
+      <div className="container mx-auto px-4 py-8">
+        <h1 className="text-2xl font-bold text-gray-900 mb-8">Staff Dashboard</h1>
+        
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="bg-white rounded-lg shadow p-6">
+            <h2 className="text-lg font-semibold text-gray-900">Pending Activation Requests</h2>
+            <p className="text-3xl font-bold text-blue-900 mt-2">{pendingRequests}</p>
+          </div>
+          
+          <div className="bg-white rounded-lg shadow p-6">
+            <h2 className="text-lg font-semibold text-gray-900">Pending Documents</h2>
+            <p className="text-3xl font-bold text-blue-900 mt-2">{pendingDocuments}</p>
+          </div>
+          
+          <div className="bg-white rounded-lg shadow p-6">
+            <h2 className="text-lg font-semibold text-gray-900">Total Agents</h2>
+            <p className="text-3xl font-bold text-blue-900 mt-2">{totalAgents}</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+} 

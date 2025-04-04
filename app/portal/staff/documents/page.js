@@ -1,20 +1,44 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 
 export default function DocumentVerification() {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(true);
   const [cars, setCars] = useState([]);
 
-  useEffect(() => {
-    checkStaffAccess();
+  const fetchCarsWithPendingDocuments = useCallback(async () => {
+    try {
+      const { data, error } = await supabaseAdmin
+        .from('cars')
+        .select(`
+          *,
+          documents!inner(*)
+        `)
+        .eq('documents.status', 'pending');
+
+      if (error) throw error;
+
+      // Process the data to get unique cars with pending document counts
+      const uniqueCars = data.reduce((acc, car) => {
+        if (!acc.find(c => c.id === car.id)) {
+          acc.push({
+            ...car,
+            pending_documents: data.filter(c => c.id === car.id).length
+          });
+        }
+        return acc;
+      }, []);
+
+      setCars(uniqueCars);
+    } catch (error) {
+      console.error('Error fetching cars:', error);
+    }
   }, []);
 
-  const checkStaffAccess = async () => {
+  const checkStaffAccess = useCallback(async () => {
     try {
       const { data: { user }, error } = await supabase.auth.getUser();
       if (error || !user) {
@@ -22,21 +46,14 @@ export default function DocumentVerification() {
         return;
       }
 
-      // Use service role to check staff access
-      const { data: profiles, error: profileError } = await supabaseAdmin
+      const { data: profile, error: profileError } = await supabaseAdmin
         .from('profiles')
         .select('*')
         .eq('id', user.id)
-        .eq('role', 'staff');
+        .single();
 
-      if (profileError) {
-        console.error('Error checking staff access:', profileError);
-        router.push('/portal');
-        return;
-      }
-
-      if (!profiles || profiles.length === 0) {
-        console.error('Not authorized as staff: No staff profile found');
+      if (profileError || !profile || profile.role !== 'staff') {
+        console.error('Not authorized as staff:', profileError);
         router.push('/portal');
         return;
       }
@@ -48,66 +65,11 @@ export default function DocumentVerification() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [router, fetchCarsWithPendingDocuments]);
 
-  const fetchCarsWithPendingDocuments = async () => {
-    try {
-      // Use service role client to fetch cars with pending documents
-      const { data: carsWithDocs, error: carsError } = await supabaseAdmin
-        .from('cars')
-        .select(`
-          id,
-          chassis_number,
-          created_at,
-          user_id,
-          documents!inner (
-            id,
-            status
-          )
-        `)
-        .eq('documents.status', 'pending')
-        .order('created_at', { ascending: false });
-
-      if (carsError) throw carsError;
-
-      if (!carsWithDocs || carsWithDocs.length === 0) {
-        setCars([]);
-        return;
-      }
-
-      // Get unique car IDs
-      const uniqueCarIds = [...new Set(carsWithDocs.map(car => car.id))];
-
-      // Fetch profiles for these cars using service role
-      const { data: profiles, error: profilesError } = await supabaseAdmin
-        .from('profiles')
-        .select('id, name, email')
-        .in('id', carsWithDocs.map(car => car.user_id));
-
-      if (profilesError) throw profilesError;
-
-      // Create a map of user profiles for easy lookup
-      const profilesMap = profiles.reduce((acc, profile) => {
-        acc[profile.id] = profile;
-        return acc;
-      }, {});
-
-      // Combine car data with profile information
-      const carsWithProfiles = carsWithDocs.map(car => {
-        const pendingDocs = car.documents.filter(doc => doc.status === 'pending').length;
-        return {
-          ...car,
-          pending_documents: pendingDocs,
-          profiles: profilesMap[car.user_id] || { name: 'Unknown', email: 'Unknown' }
-        };
-      });
-
-      setCars(carsWithProfiles);
-    } catch (error) {
-      console.error('Error fetching cars:', error);
-      setCars([]);
-    }
-  };
+  useEffect(() => {
+    checkStaffAccess();
+  }, [checkStaffAccess]);
 
   if (isLoading) {
     return (
@@ -128,10 +90,10 @@ export default function DocumentVerification() {
           
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {cars.map((car) => (
-              <Link
+              <div
                 key={car.id}
-                href={`/portal/staff/documents/${car.id}`}
-                className="block bg-white border border-gray-200 rounded-lg shadow-sm hover:shadow-md transition-shadow duration-200"
+                onClick={() => router.push(`/portal/staff/documents/${car.id}`)}
+                className="block bg-white border border-gray-200 rounded-lg shadow-sm hover:shadow-md transition-shadow duration-200 cursor-pointer"
               >
                 <div className="p-6">
                   <div className="flex items-center justify-between mb-4">
@@ -144,9 +106,6 @@ export default function DocumentVerification() {
                   </div>
                   
                   <div className="space-y-2">
-                    <p className="text-sm text-gray-600">
-                      <span className="font-medium">Owner:</span> {car.profiles.name || car.profiles.email}
-                    </p>
                     <p className="text-sm text-gray-600">
                       <span className="font-medium">Added:</span> {new Date(car.created_at).toLocaleDateString()}
                     </p>
@@ -169,7 +128,7 @@ export default function DocumentVerification() {
                     </svg>
                   </div>
                 </div>
-              </Link>
+              </div>
             ))}
           </div>
 

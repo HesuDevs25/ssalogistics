@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { useRouter } from "next/navigation";
@@ -10,11 +10,22 @@ export default function AgentsPage() {
   const [agents, setAgents] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
 
-  useEffect(() => {
-    checkStaffAccess();
+  const fetchAgents = useCallback(async () => {
+    try {
+      const { data, error } = await supabaseAdmin
+        .from('profiles')
+        .select('*')
+        .eq('role', 'customer')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setAgents(data || []);
+    } catch (error) {
+      console.error('Error fetching agents:', error);
+    }
   }, []);
 
-  const checkStaffAccess = async () => {
+  const checkStaffAccess = useCallback(async () => {
     try {
       const { data: { user }, error } = await supabase.auth.getUser();
       if (error || !user) {
@@ -41,22 +52,11 @@ export default function AgentsPage() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [router, fetchAgents]);
 
-  const fetchAgents = async () => {
-    try {
-      const { data, error } = await supabaseAdmin
-        .from('profiles')
-        .select('*')
-        .eq('role', 'customer')
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      setAgents(data || []);
-    } catch (error) {
-      console.error('Error fetching agents:', error);
-    }
-  };
+  useEffect(() => {
+    checkStaffAccess();
+  }, [checkStaffAccess]);
 
   const filteredAgents = agents.filter(agent => 
     agent.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -134,4 +134,4 @@ export default function AgentsPage() {
       </div>
     </div>
   );
-} 
+}
