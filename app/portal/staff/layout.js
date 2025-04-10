@@ -8,6 +8,7 @@ import {
   DocumentCheckIcon, 
   UserPlusIcon,
   ArrowLeftOnRectangleIcon,
+  CheckCircleIcon,
   Bars3Icon,
 } from '@heroicons/react/24/outline';
 import { supabase } from "@/lib/supabase";
@@ -21,6 +22,7 @@ export default function StaffLayout({ children }) {
   const navigation = [
     { name: 'Dashboard', href: '/portal/staff', icon: HomeIcon },
     { name: 'Document Verification', href: '/portal/staff/documents', icon: DocumentCheckIcon },
+    {name: 'Verified Vehicles', href: '/portal/staff/verified-vehicles', icon: CheckCircleIcon},
     { name: 'Agents', href: '/portal/staff/agents', icon: UsersIcon },
     { name: 'Activation Requests', href: '/portal/staff/activation-requests', icon: UserPlusIcon },
   ];

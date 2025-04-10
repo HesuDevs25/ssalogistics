@@ -156,6 +156,14 @@ export default function ProfilePage() {
     }
   };
 
+  const handleReapply = () => {
+    // Reset form state
+    setCompanyName('');
+    setAuthLetter(null);
+    setIdDocument(null);
+    setShowActivationForm(true);
+  };
+
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-100">
@@ -230,34 +238,7 @@ export default function ProfilePage() {
                   <div className="mt-6 border-t pt-6">
                     <h4 className="font-medium text-gray-900 mb-2">Account Activation</h4>
                     
-                    {activationStatus ? (
-                      <div className="bg-blue-50 p-4 rounded-md">
-                        <div className="flex items-start">
-                          <div className="flex-shrink-0">
-                            <svg className="h-5 w-5 text-blue-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                              <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2h-1V9z" clipRule="evenodd" />
-                            </svg>
-                          </div>
-                          <div className="ml-3">
-                            <h3 className="text-sm font-medium text-blue-800">Activation Request Status: {activationStatus.status.charAt(0).toUpperCase() + activationStatus.status.slice(1)}</h3>
-                            <div className="mt-2 text-sm text-blue-700">
-                              <p>Your account activation request has been submitted and is {activationStatus.status}. You will be notified once it has been reviewed.</p>
-                            </div>
-                            <p className="mt-2 text-xs text-blue-500">Submitted on {new Date(activationStatus.created_at).toLocaleDateString()}</p>
-                          </div>
-                        </div>
-                      </div>
-                    ) : !showActivationForm ? (
-                      <div>
-                        <p className="text-gray-600 mb-4">Your account needs to be activated before you can fully access all features.</p>
-                        <button 
-                          onClick={() => setShowActivationForm(true)}
-                          className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-900 hover:bg-blue-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                        >
-                          Request Activation
-                        </button>
-                      </div>
-                    ) : (
+                    {showActivationForm ? (
                       <div className="bg-white p-4 border rounded-md">
                         <h3 className="font-medium text-lg text-gray-900 mb-4">Account Activation Request</h3>
                         <form onSubmit={handleActivationRequest} className="space-y-4">
@@ -357,7 +338,12 @@ export default function ProfilePage() {
                           <div className="flex justify-end space-x-3">
                             <button
                               type="button"
-                              onClick={() => setShowActivationForm(false)}
+                              onClick={() => {
+                                setShowActivationForm(false);
+                                setCompanyName('');
+                                setAuthLetter(null);
+                                setIdDocument(null);
+                              }}
                               className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                             >
                               Cancel
@@ -370,6 +356,45 @@ export default function ProfilePage() {
                             </button>
                           </div>
                         </form>
+                      </div>
+                    ) : activationStatus ? (
+                      <div className="bg-blue-50 p-4 rounded-md">
+                        <div className="flex items-start">
+                          <div className="flex-shrink-0">
+                            <svg className="h-5 w-5 text-blue-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                              <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2h-1V9z" clipRule="evenodd" />
+                            </svg>
+                          </div>
+                          <div className="ml-3">
+                            <h3 className="text-sm font-medium text-blue-800">Activation Request Status: {activationStatus.status.charAt(0).toUpperCase() + activationStatus.status.slice(1)}</h3>
+                            <div className="mt-2 text-sm text-blue-700">
+                              {activationStatus.status === 'rejected' ? (
+                                <>
+                                  <p>Your account activation request was rejected. Reason: {activationStatus.notes}</p>
+                                  <button 
+                                    onClick={handleReapply}
+                                    className="mt-4 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-900 hover:bg-blue-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                                  >
+                                    Reapply for Activation
+                                  </button>
+                                </>
+                              ) : (
+                                <p>Your account activation request has been submitted and is {activationStatus.status}. You will be notified once it has been reviewed.</p>
+                              )}
+                            </div>
+                            <p className="mt-2 text-xs text-blue-500">Submitted on {new Date(activationStatus.created_at).toLocaleDateString()}</p>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div>
+                        <p className="text-gray-600 mb-4">Your account needs to be activated before you can fully access all features.</p>
+                        <button 
+                          onClick={() => setShowActivationForm(true)}
+                          className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-900 hover:bg-blue-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                        >
+                          Request Activation
+                        </button>
                       </div>
                     )}
                   </div>

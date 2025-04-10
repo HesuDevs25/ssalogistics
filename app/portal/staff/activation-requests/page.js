@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { useRouter } from "next/navigation";
+import { sendEmailNotification } from "@/app/lib/email";
 
 export default function ActivationRequestsPage() {
   const router = useRouter();
@@ -12,6 +13,9 @@ export default function ActivationRequestsPage() {
   const [selectedRequest, setSelectedRequest] = useState(null);
   const [rejectReason, setRejectReason] = useState("");
   const [staff, setStaff] = useState(null);
+  const [showDocumentModal, setShowDocumentModal] = useState(false);
+  const [currentDocument, setCurrentDocument] = useState(null);
+  const [documentUrl, setDocumentUrl] = useState(null);
 
   useEffect(() => {
     checkStaffAccess();
@@ -68,6 +72,28 @@ export default function ActivationRequestsPage() {
     }
   };
 
+  const handleViewDocument = async (documentPath) => {
+    try {
+      setIsLoading(true);
+      setCurrentDocument(documentPath);
+      
+      // Get the signed URL for the document
+      const { data, error } = await supabaseAdmin.storage
+        .from('verification-docs')
+        .createSignedUrl(documentPath, 3600); // URL expires in 1 hour
+
+      if (error) throw error;
+      
+      setDocumentUrl(data.signedUrl);
+      setShowDocumentModal(true);
+    } catch (error) {
+      console.error('Error fetching document:', error);
+      alert('Failed to load document');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleApproveRequest = async (requestId, userId) => {
     try {
       setIsLoading(true);
@@ -93,15 +119,33 @@ export default function ActivationRequestsPage() {
 
       if (profileError) throw profileError;
 
+      // Get recipient email
+      const recipientEmail = requests.find(r => r.id === requestId)?.profiles?.email;
+      if (!recipientEmail) {
+        throw new Error('Recipient email not found');
+      }
+
       // Create notification
-      await supabaseAdmin
+      const notification = {
+        type: 'account_activation',
+        title: 'Account Activation Approved',
+        message: 'Your account has been activated. You now have full access to all features.',
+        recipient_email: recipientEmail
+      };
+
+      // Insert notification into database
+      const { error: notificationError } = await supabaseAdmin
         .from('notifications')
-        .insert([{
-          type: 'account_activation',
-          title: 'Account Activation Approved',
-          message: 'Your account has been activated. You now have full access to all features.',
-          recipient_id: userId
-        }]);
+        .insert([notification]);
+
+      if (notificationError) throw notificationError;
+
+      // Send email notification
+      await sendEmailNotification({
+        to: recipientEmail,
+        subject: notification.title,
+        message: notification.message
+      });
 
       await fetchRequests();
       alert('Account activation approved successfully');
@@ -136,14 +180,16 @@ export default function ActivationRequestsPage() {
       if (requestError) throw requestError;
 
       // Create notification
-      await supabaseAdmin
+      const { error: notificationError } = await supabaseAdmin
         .from('notifications')
         .insert([{
           type: 'account_activation',
           title: 'Account Activation Rejected',
           message: `Your account activation request was rejected. Reason: ${rejectReason.trim()}`,
-          recipient_id: selectedRequest.user_id
+          recipient_email: requests.find(r => r.id === selectedRequest.id)?.profiles?.email
         }]);
+
+      if (notificationError) throw notificationError;
 
       await fetchRequests();
       setShowRejectModal(false);
@@ -188,15 +234,20 @@ export default function ActivationRequestsPage() {
                 </div>
 
                 <div className="flex space-x-2">
-                  <button
-                    onClick={() => window.open(request.auth_letter_url, '_blank')}
-                    className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700"
-                  >
-                    View Documents
-                  </button>
-
                   {request.status === 'pending' && (
                     <>
+                      <button
+                        onClick={() => handleViewDocument(request.auth_letter_path)}
+                        className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700"
+                      >
+                        View Authorization Letter
+                      </button>
+                      <button
+                        onClick={() => handleViewDocument(request.id_document_path)}
+                        className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700"
+                      >
+                        View ID Document
+                      </button>
                       <button
                         onClick={() => handleApproveRequest(request.id, request.user_id)}
                         className="px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700"
@@ -231,6 +282,45 @@ export default function ActivationRequestsPage() {
         </ul>
       </div>
 
+      {/* Document View Modal */}
+      {showDocumentModal && (
+        <div className="fixed z-10 inset-0 overflow-y-auto">
+          <div className="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+            <div className="fixed inset-0 transition-opacity" aria-hidden="true">
+              <div className="absolute inset-0 bg-gray-500 opacity-75"></div>
+            </div>
+
+            <div className="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-4xl sm:w-full">
+              <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                <div className="flex justify-between items-start">
+                  <h3 className="text-lg font-medium text-gray-900">View Document</h3>
+                  <button
+                    onClick={() => {
+                      setShowDocumentModal(false);
+                      setDocumentUrl(null);
+                    }}
+                    className="text-gray-400 hover:text-gray-500"
+                  >
+                    <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+                <div className="mt-4">
+                  {documentUrl && (
+                    <iframe
+                      src={documentUrl}
+                      className="w-full h-[600px] border-0"
+                      title="Document Viewer"
+                    />
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Reject Modal */}
       {showRejectModal && (
         <div className="fixed z-10 inset-0 overflow-y-auto">
@@ -241,10 +331,10 @@ export default function ActivationRequestsPage() {
 
             <div className="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
               <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
-                <h3 className="text-lg font-medium text-gray-900">Reject Activation Request</h3>
+                <h3 className="text-lg font-medium text-gray-900">Add Reason for Rejection</h3>
                 <div className="mt-2">
                   <textarea
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                    className="mt-1 block w-full rounded-md border-2 border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-gray-900 p-4"
                     rows="4"
                     placeholder="Enter reason for rejection..."
                     value={rejectReason}

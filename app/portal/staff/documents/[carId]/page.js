@@ -5,6 +5,7 @@ import { supabase } from "@/lib/supabase";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { sendEmailNotification } from '@/lib/email';
 
 export default function CarDocumentVerification({ params }) {
   const router = useRouter();
@@ -110,14 +111,25 @@ export default function CarDocumentVerification({ params }) {
 
       if (error) throw error;
 
+      // Create notification
+      const notification = {
+        type: 'document_verification',
+        title: 'Document Verified',
+        message: 'Your document has been verified successfully.',
+        recipient_email: car.profiles.email
+      };
+
+      // Insert notification into database
       await supabaseAdmin
         .from('notifications')
-        .insert([{
-          type: 'document_verification',
-          title: 'Document Verified',
-          message: 'Your document has been verified successfully.',
-          recipient_email: car.profiles.email
-        }]);
+        .insert([notification]);
+
+      // Send email notification
+      await sendEmailNotification({
+        to: car.profiles.email,
+        subject: notification.title,
+        message: notification.message
+      });
 
       await fetchCarAndDocuments();
       alert('Document verified successfully');
