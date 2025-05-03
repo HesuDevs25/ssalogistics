@@ -86,40 +86,14 @@ export default function AboutPage() {
 
   return (
     <div className="min-h-screen">
-      {/* Hero Section with Animated Background */}
-      <section className="relative bg-gradient-blue overflow-hidden">
-        <div className="absolute inset-0 bg-mesh opacity-20"></div>
-        <div className="absolute inset-0 bg-noise opacity-10"></div>
-        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-blue-900/20 to-blue-900/40"></div>
-        
-        {/* Animated floating elements */}
-        <div className="absolute inset-0 overflow-hidden">
-          {[
-            { top: "10%", left: "20%", duration: "8s", delay: "0s" },
-            { top: "30%", left: "70%", duration: "7s", delay: "1s" },
-            { top: "60%", left: "40%", duration: "9s", delay: "2s" },
-            { top: "80%", left: "80%", duration: "6s", delay: "3s" },
-            { top: "20%", left: "60%", duration: "7s", delay: "4s" }
-          ].map((element, i) => (
-            <div
-              key={i}
-              className="absolute w-64 h-64 bg-blue-500/10 rounded-full blur-3xl"
-              style={{
-                top: element.top,
-                left: element.left,
-                animation: `float ${element.duration} infinite ease-in-out`,
-                animationDelay: element.delay,
-              }}
-            />
-          ))}
-        </div>
-
-        <div className="relative container mx-auto px-4 py-24">
+      {/* Hero Section with New Background */}
+      <section className="relative bg-[var(--primary)] text-white overflow-hidden">
+        <div className="container mx-auto px-4 py-24">
           <div className={`max-w-3xl transform transition-all duration-1000 ${
             isVisible ? 'translate-y-0 opacity-100' : 'translate-y-12 opacity-0'
           }`}>
-            <h1 className="text-4xl md:text-5xl font-bold mb-6 gradient-text">About Us</h1>
-            <p className="text-xl md:text-2xl text-gray-200">
+            <h1 className="text-4xl md:text-5xl font-bold mb-6 text-white">About Us</h1>
+            <p className="text-xl md:text-2xl text-white opacity-90">
               Your trusted partner in logistics and vehicle handling
             </p>
           </div>
@@ -132,7 +106,7 @@ export default function AboutPage() {
         <div className="container mx-auto px-4 relative">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
             <div className="glass p-8 rounded-lg">
-              <h2 className="text-3xl font-bold mb-6 gradient-text">Our Story</h2>
+              <h2 className="text-3xl font-bold mb-6 text-[var(--primary)]">Our Story</h2>
               <p className="text-lg text-gray-700 mb-6">
                 Founded in 2013, SSA Logistics Limited has grown to become a leading logistics company in Tanzania.
                 As an authorized agent of the Tanzania Port Authority, we specialize in vehicle handling,
@@ -162,7 +136,7 @@ export default function AboutPage() {
         <div className="absolute inset-0 bg-mesh opacity-5"></div>
         <div className="container mx-auto px-4 relative">
           <div className="text-center mb-16">
-            <h2 className="text-3xl font-bold mb-4 gradient-text">Our Facilities</h2>
+            <h2 className="text-3xl font-bold mb-4 text-[var(--primary)]">Our Facilities</h2>
             <p className="text-xl text-gray-600 max-w-3xl mx-auto">
               Explore our modern facilities designed for efficient vehicle handling and storage
             </p>
@@ -234,7 +208,7 @@ export default function AboutPage() {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
             {stats.map((stat, index) => (
               <div key={index} className="glass hover-lift p-6 rounded-lg text-center transition-all duration-300">
-                <div className="text-4xl font-bold text-blue-600 mb-2">{stat.value}</div>
+                <div className="text-4xl font-bold text-[var(--primary)] mb-2">{stat.value}</div>
                 <div className="text-gray-700">{stat.label}</div>
               </div>
             ))}
@@ -246,14 +220,14 @@ export default function AboutPage() {
       <section className="py-16 md:py-24 bg-gradient-to-b from-gray-50 to-white relative overflow-hidden">
         <div className="absolute inset-0 bg-mesh opacity-5"></div>
         <div className="container mx-auto px-4 relative">
-          <h2 className="text-3xl font-bold mb-12 text-center gradient-text">Our Values</h2>
+          <h2 className="text-3xl font-bold mb-12 text-center text-[var(--primary)]">Our Values</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
             {values.map((value, index) => (
               <div key={index} className="bg-white shadow-lg hover:shadow-xl p-6 rounded-lg text-center transition-all duration-300 hover:-translate-y-1">
-                <div className="bg-blue-100 text-blue-600 p-3 rounded-full inline-block mb-4">
+                <div className="bg-blue-100 text-[var(--primary)] p-3 rounded-full inline-block mb-4">
                   {value.icon}
                 </div>
-                <h3 className="text-xl font-semibold mb-2 text-blue-900">{value.title}</h3>
+                <h3 className="text-xl font-semibold mb-2 text-[var(--primary)]">{value.title}</h3>
                 <p className="text-gray-700">{value.description}</p>
               </div>
             ))}
@@ -261,27 +235,30 @@ export default function AboutPage() {
         </div>
       </section>
 
-      {/* CTA Section */}
-      <section className="py-16 md:py-24 bg-gradient-blue text-white relative overflow-hidden">
-        <div className="absolute inset-0 bg-mesh opacity-20"></div>
-        <div className="absolute inset-0 bg-noise opacity-10"></div>
+      {/* CTA Section with New Background */}
+      <section className="py-16 md:py-24 bg-[var(--primary)] text-white relative overflow-hidden">
         <div className="container mx-auto px-4 text-center relative">
-          <h2 className="text-3xl md:text-4xl font-bold mb-6 gradient-text">Join Our Journey</h2>
-          <p className="text-xl md:text-2xl mb-8 max-w-3xl mx-auto text-gray-200">
+          <h2 className="text-3xl md:text-4xl font-bold mb-6 text-white">Join Our Journey</h2>
+          <p className="text-xl md:text-2xl mb-8 max-w-3xl mx-auto text-white opacity-90">
             Be part of our success story and experience excellence in logistics.
           </p>
           <div className="flex flex-wrap justify-center gap-4">
             <Link 
               href="/contact" 
-              className="relative overflow-hidden btn-glow text-white px-8 py-3 rounded-md transition group"
+              className="bg-white text-[var(--primary)] px-8 py-3 rounded-md transition font-medium"
             >
-              <span className="absolute inset-0 bg-gradient-to-r from-blue-600 to-blue-800 rounded-md z-0"></span>
-              <span className="relative z-10 flex items-center">
-                <svg className="w-5 h-5 mr-2 transform transition-transform group-hover:rotate-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <span className="flex items-center">
+                <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path>
                 </svg>
                 Get in Touch
               </span>
+            </Link>
+            <Link 
+              href="/services" 
+              className="bg-transparent border border-white text-white px-8 py-3 rounded-md hover:bg-white/10 transition font-medium"
+            >
+              Explore Services
             </Link>
           </div>
         </div>

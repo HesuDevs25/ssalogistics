@@ -6,7 +6,7 @@ export async function sendEmailNotification({ to, subject, message }) {
     
     const { data, error } = await supabaseAdmin.functions.invoke('send-email', {
       body: {
-        to,
+        to  ,
         subject,
         message
       }

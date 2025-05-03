@@ -58,6 +58,10 @@ export default function AgentsPage() {
     checkStaffAccess();
   }, [checkStaffAccess]);
 
+  const handleAgentClick = (agentId) => {
+    router.push(`/portal/staff/agents/${agentId}`);
+  };
+
   const filteredAgents = agents.filter(agent => 
     agent.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     agent.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -92,12 +96,15 @@ export default function AgentsPage() {
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Phone</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Joined</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Documents</th>
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
             {filteredAgents.map((agent) => (
-              <tr key={agent.id}>
+              <tr 
+                key={agent.id} 
+                className="hover:bg-gray-50 cursor-pointer"
+                onClick={() => handleAgentClick(agent.id)}
+              >
                 <td className="px-6 py-4 whitespace-nowrap">
                   <div className="text-sm font-medium text-gray-900">{agent.name || 'N/A'}</div>
                 </td>
@@ -118,14 +125,6 @@ export default function AgentsPage() {
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                   {new Date(agent.created_at).toLocaleDateString()}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  <button
-                    onClick={() => router.push(`/portal/staff/documents?user=${agent.id}`)}
-                    className="text-blue-600 hover:text-blue-900"
-                  >
-                    View Documents
-                  </button>
                 </td>
               </tr>
             ))}

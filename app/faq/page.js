@@ -80,49 +80,27 @@ export default function FAQPage() {
 
   return (
     <div className="min-h-screen">
-      {/* Hero Section with Animated Background */}
-      <section className="relative bg-gradient-blue overflow-hidden">
-        <div className="absolute inset-0 bg-mesh opacity-20"></div>
-        <div className="absolute inset-0 bg-noise opacity-10"></div>
-        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-blue-900/20 to-blue-900/40"></div>
-        
-        {/* Animated floating elements */}
-        <div className="absolute inset-0 overflow-hidden">
-          {[...Array(5)].map((_, i) => (
-            <div
-              key={i}
-              className="absolute w-64 h-64 bg-blue-500/10 rounded-full blur-3xl"
-              style={{
-                top: `${Math.random() * 100}%`,
-                left: `${Math.random() * 100}%`,
-                animation: `float ${5 + Math.random() * 5}s infinite ease-in-out`,
-                animationDelay: `${Math.random() * 5}s`,
-              }}
-            />
-          ))}
-        </div>
-
-        <div className="relative container mx-auto px-4 py-24">
+      {/* Hero Section with Solid Background */}
+      <section className="relative bg-[var(--primary)] text-white overflow-hidden">
+        <div className="container mx-auto px-4 py-24">
           <div className={`max-w-3xl transform transition-all duration-1000 ${
             isVisible ? 'translate-y-0 opacity-100' : 'translate-y-12 opacity-0'
           }`}>
-            <h1 className="text-4xl md:text-5xl font-bold mb-6 gradient-text">Frequently Asked Questions</h1>
-            <p className="text-xl md:text-2xl text-gray-200">
+            <h1 className="text-4xl md:text-5xl font-bold mb-6 text-white">Frequently Asked Questions</h1>
+            <p className="text-xl md:text-2xl text-white opacity-90">
               Find answers to common questions about our logistics services
             </p>
           </div>
         </div>
       </section>
 
-      {/* FAQ Accordion with Glass Effect */}
-      <section className="py-16 md:py-24 bg-gradient-to-b from-gray-50 to-white relative overflow-hidden">
-        <div className="absolute inset-0 bg-mesh opacity-5"></div>
+      {/* FAQ Section */}
+      <section className="py-16 md:py-24 bg-gray-100 relative overflow-hidden">
         <div className="container mx-auto px-4 relative">
-          <div className="mb-12 glass p-8 rounded-lg">
-            <p className="text-lg text-gray-700">
-              Browse through our frequently asked questions to find answers about our vehicle handling,
-              storage, delivery, and document verification services. If you can&apos;t find the information
-              you&apos;re looking for, please don&apos;t hesitate to contact us.
+          <div className="text-center mb-16">
+            <h1 className="text-4xl md:text-5xl font-bold mb-4 text-[var(--primary)]">Frequently Asked Questions</h1>
+            <p className="text-xl text-gray-700 max-w-3xl mx-auto">
+              Find answers to the most common questions about our logistics services, document processing, and customs clearance.
             </p>
           </div>
 
@@ -132,13 +110,13 @@ export default function FAQPage() {
                 key={index} 
                 className="bg-white shadow-lg hover:shadow-xl p-6 rounded-lg transition-all duration-300 hover:-translate-y-1"
               >
-                <button
+                <button 
                   className="flex justify-between items-center w-full text-left focus:outline-none group"
                   onClick={() => toggleAccordion(index)}
                 >
-                  <span className="text-lg font-semibold text-blue-900 group-hover:text-blue-600 transition-colors duration-300">{item.question}</span>
+                  <span className="text-lg font-semibold text-[var(--primary)] group-hover:text-[var(--primary-light)] transition-colors duration-300">{item.question}</span>
                   <svg
-                    className={`w-5 h-5 text-blue-600 transform transition-transform duration-300 ${
+                    className={`w-5 h-5 text-[var(--primary)] transform transition-transform duration-300 ${
                       activeIndex === index ? 'rotate-180' : ''
                     }`}
                     fill="none"
@@ -166,37 +144,22 @@ export default function FAQPage() {
         </div>
       </section>
 
-      {/* Contact Section with Modern Design */}
-      <section className="py-16 md:py-24 bg-gradient-blue text-white relative overflow-hidden">
-        <div className="absolute inset-0 bg-mesh opacity-20"></div>
-        <div className="absolute inset-0 bg-noise opacity-10"></div>
-        <div className="container mx-auto px-4 text-center relative">
-          <h2 className="text-3xl md:text-4xl font-bold mb-6 gradient-text">Still have questions?</h2>
-          <p className="text-xl md:text-2xl mb-8 max-w-3xl mx-auto text-gray-200">
-            Our team is ready to assist you with any inquiries about our services.
+      {/* Contact CTA */}
+      <section className="py-16 md:py-20 bg-white relative overflow-hidden">
+        <div className="container mx-auto px-4 text-center">
+          <h2 className="text-3xl md:text-4xl font-bold mb-6 text-[var(--primary)]">
+            Still Have Questions?
+          </h2>
+          <p className="text-xl text-gray-700 max-w-2xl mx-auto mb-8">
+            Our team is ready to assist you with any questions you might have about our services.
           </p>
-          <div className="flex flex-wrap justify-center gap-4">
-            <Link 
-              href="/contact" 
-              className="relative overflow-hidden btn-glow text-white px-8 py-3 rounded-md transition group"
-            >
-              <span className="absolute inset-0 bg-gradient-to-r from-blue-600 to-blue-800 rounded-md z-0"></span>
-              <span className="relative z-10 flex items-center">
-                <svg className="w-5 h-5 mr-2 transform transition-transform group-hover:rotate-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path>
-                </svg>
-                Get in Touch
-              </span>
+          <div className="flex flex-col sm:flex-row gap-4 justify-center">
+            <Link href="/contact" className="bg-[var(--primary)] text-white px-8 py-3 rounded-md transition">
+              Contact Us
             </Link>
-            <a 
-              href="tel:+255123456789" 
-              className="glass text-white px-8 py-3 rounded-md hover:bg-white/20 transition font-medium text-lg flex items-center"
-            >
-              <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
-              </svg>
-              Call Us
-            </a>
+            <Link href="/services" className="bg-gray-200 text-gray-800 px-8 py-3 rounded-md transition hover:bg-gray-300">
+              Explore Services
+            </Link>
           </div>
         </div>
       </section>

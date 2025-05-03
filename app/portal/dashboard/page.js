@@ -3,14 +3,36 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import {
+  TruckIcon,
+  UserCircleIcon,
+  CheckCircleIcon,
+  ClockIcon,
+  XCircleIcon,
+  ExclamationCircleIcon,
+  CurrencyDollarIcon
+} from '@heroicons/react/24/outline';
 
-export default function DashboardPage() {
+export default function DashboardPage() { 
   const router = useRouter();
   const [user, setUser] = useState(null);
-  const [cars, setCars] = useState([]);
-  const [documents, setDocuments] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [showModal, setShowModal] = useState(false);
+  const [vehicles, setVehicles] = useState([]);
+  const [vehiclesLoading, setVehiclesLoading] = useState(true);
+  const [invoices, setInvoices] = useState([]);
+  const [invoicesLoading, setInvoicesLoading] = useState(true);
+  const [vehicleStats, setVehicleStats] = useState({
+    total: 0,
+    approved: 0,
+    pending: 0,
+    rejected: 0,
+    draft: 0
+  });
+  const [invoiceStats, setInvoiceStats] = useState({
+    total: 0,
+    issued: 0,
+    requested: 0
+  });
 
   useEffect(() => {
     const checkUser = async () => {
@@ -29,14 +51,11 @@ export default function DashboardPage() {
           .single();
 
         if (profileError) {
-          console.error('Profile fetch error:', profileError);
-          router.push('/portal');
-          return;
+          console.warn('Profile fetch warning:', profileError.message);
+          setUser({ ...user, profile: null });
+        } else {
+          setUser({ ...user, profile });
         }
-
-        setUser({ ...user, profile });
-        await fetchCars(user.id);
-        await fetchDocuments(user.id);
       } catch (error) {
         console.error('Auth check error:', error);
         router.push('/portal');
@@ -44,239 +63,362 @@ export default function DashboardPage() {
         setIsLoading(false);
       }
     };
-
     checkUser();
   }, [router]);
 
-  const fetchCars = async (userId) => {
-    if (!userId) return;
-    
-    try {
-      const { data, error } = await supabase
-        .from('cars')
-        .select('*')
-        .eq('user_id', userId)
-        .order('created_at', { ascending: false });
-
-      if (error) {
-        console.error('Error fetching cars:', error);
-        return;
-      }
+  // Fetch vehicles
+  useEffect(() => {
+    const fetchVehicles = async () => {
+      if (!user?.id) return;
       
-      setCars(data || []);
-    } catch (error) {
-      console.error('Error fetching cars:', error);
-    }
-  };
+      setVehiclesLoading(true);
+      try {
+        // Get all user's vehicles for stats
+        const { data: allVehicles, error: statsError } = await supabase
+          .from('vehicles')
+          .select('id, status')
+          .eq('user_id', user.id);
+          
+        if (statsError) {
+          console.error('Error fetching vehicle stats:', statsError);
+        } else {
+          // Calculate stats
+          const stats = {
+            total: allVehicles.length,
+            approved: allVehicles.filter(v => v.status === 'approved').length,
+            pending: allVehicles.filter(v => v.status === 'pending').length,
+            rejected: allVehicles.filter(v => v.status === 'rejected').length,
+            draft: allVehicles.filter(v => v.status === 'draft').length
+          };
+          setVehicleStats(stats);
+        }
 
-  const fetchDocuments = async (userId) => {
-    if (!userId) return;
-    
-    try {
-      const { data: docs, error } = await supabase
-        .from('documents')
-        .select('*')
-        .eq('user_id', userId)
-        .order('created_at', { ascending: false });
-
-      if (error) {
-        console.error('Error fetching documents:', error);
-        return;
+        // Get the 3 most recent vehicles for display
+        const { data, error } = await supabase
+          .from('vehicles')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false })
+          .limit(3);
+          
+        if (error) {
+          console.error('Error fetching recent vehicles:', error);
+          setVehicles([]);
+        } else {
+          setVehicles(data || []);
+        }
+      } catch (err) {
+        console.error('Unexpected error fetching vehicles:', err);
+        setVehicles([]);
+      } finally {
+        setVehiclesLoading(false);
       }
+    };
+
+    if (user?.id) {
+      fetchVehicles();
+    }
+  }, [user]);
+
+  // Fetch invoices
+  useEffect(() => {
+    const fetchInvoices = async () => {
+      if (!user?.id) return;
       
-      setDocuments(docs || []);
-    } catch (error) {
-      console.error('Error fetching documents:', error);
-    }
-  };
+      setInvoicesLoading(true);
+      try {
+        // Get all user's invoices for stats
+        const { data: allInvoices, error: statsError } = await supabase
+          .from('invoices')
+          .select('id, status')
+          .eq('user_id', user.id);
+          
+        if (statsError) {
+          console.error('Error fetching invoice stats:', statsError);
+        } else {
+          // Calculate stats
+          const stats = {
+            total: allInvoices.length,
+            issued: allInvoices.filter(i => i.status === 'issued').length,
+            requested: allInvoices.filter(i => i.status === 'requested').length
+          };
+          setInvoiceStats(stats);
+        }
 
-  const handleActionClick = (e) => {
-    if (user?.profile?.account_status !== 'active') {
-    e.preventDefault();
-      setShowModal(true);
-    }
-  };
+        // Get the 3 most recent invoices
+        const { data, error } = await supabase
+          .from('invoices')
+          .select(`
+            id, 
+            status, 
+            request_date, 
+            issue_date,
+            vehicle_id,
+            vehicles(chassis_number)
+          `)
+          .eq('user_id', user.id)
+          .order('request_date', { ascending: false })
+          .limit(3);
+          
+        if (error) {
+          console.error('Error fetching recent invoices:', error);
+          setInvoices([]);
+        } else {
+          setInvoices(data || []);
+        }
+      } catch (err) {
+        console.error('Unexpected error fetching invoices:', err);
+        setInvoices([]);
+      } finally {
+        setInvoicesLoading(false);
+      }
+    };
 
-  if (isLoading) {
+    if (user?.id) {
+      fetchInvoices();
+    }
+  }, [user]);
+
+  if (isLoading || vehiclesLoading || invoicesLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-100">
-        <div className="text-center">
+        <div className="p-4 text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-900 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading...</p>
+          <p className="mt-4 text-gray-600">Loading dashboard...</p>
         </div>
       </div>
     );
   }
 
-  // Calculate document statistics
-  const totalDocuments = documents.length;
-  const verifiedDocuments = documents.filter(doc => doc.status === 'verified').length;
-  const pendingDocuments = documents.filter(doc => doc.status === 'pending').length;
-  const rejectedDocuments = documents.filter(doc => doc.status === 'rejected').length;
+  const getStatusBadgeClass = (status) => {
+    switch (status) {
+      case 'approved': return 'bg-green-100 text-green-800';
+      case 'pending': return 'bg-yellow-100 text-yellow-800';
+      case 'rejected': return 'bg-red-100 text-red-800';
+      case 'draft': return 'bg-gray-100 text-gray-800';
+      case 'issued': return 'bg-green-100 text-green-800';
+      case 'requested': return 'bg-yellow-100 text-yellow-800';
+      default: return 'bg-gray-100 text-gray-800';
+    }
+  };
+  
+  const getStatusIcon = (status) => {
+    switch (status) {
+      case 'approved': return <CheckCircleIcon className="h-4 w-4 mr-1 inline-block" />;
+      case 'pending': return <ClockIcon className="h-4 w-4 mr-1 inline-block" />;
+      case 'rejected': return <XCircleIcon className="h-4 w-4 mr-1 inline-block" />;
+      case 'draft': return <ExclamationCircleIcon className="h-4 w-4 mr-1 inline-block" />;
+      case 'issued': return <CheckCircleIcon className="h-4 w-4 mr-1 inline-block" />;
+      case 'requested': return <ClockIcon className="h-4 w-4 mr-1 inline-block" />;
+      default: return null;
+    }
+  };
+
+  // Function to count vehicle documents
+  const getDocumentCount = (vehicle) => {
+    let count = 0;
+    if (vehicle.registration_doc) count++;
+    if (vehicle.insurance_doc) count++;
+    if (vehicle.ownership_doc) count++;
+    return count;
+  };
 
   return (
-    <div className="min-h-screen bg-gray-100">
-      <main className="container mx-auto px-4 py-8">
-        <div className="space-y-6">
-          {/* Account Status Card */}
-          <div className="bg-white rounded-lg shadow-sm p-6">
-            <h2 className="text-2xl font-bold text-blue-900 mb-4">Account Overview</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900">Account Information</h3>
-                <div className="mt-4 space-y-2">
-                  <p className="text-gray-600">
-                    <span className="font-medium">Name:</span> {user?.profile?.name}
-                  </p>
-                  <p className="text-gray-600">
-                    <span className="font-medium">Email:</span> {user?.email}
-                  </p>
-                  <p className="text-gray-600">
-                    <span className="font-medium">Account Status:</span>
-                    <span className={`ml-2 px-2 py-1 text-xs font-semibold rounded-full ${
-                      user?.profile?.account_status === 'active' 
-                        ? 'bg-green-100 text-green-800' 
-                        : 'bg-yellow-100 text-yellow-800'
-                    }`}>
-                      {user?.profile?.account_status?.charAt(0).toUpperCase() + user?.profile?.account_status?.slice(1)}
-                    </span>
-                  </p>
-                </div>
+    <div className="container mx-auto px-4 py-8">
+      <div className="space-y-6">
+        <div className="bg-white rounded-lg shadow-md p-6">
+          <h2 className="text-2xl font-bold text-blue-900 mb-6">Dashboard Overview</h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="bg-gray-50 p-4 rounded-md">
+              <h3 className="text-lg font-semibold text-gray-900 mb-3">Account Information</h3>
+              <div className="space-y-2 text-sm">
+                <p className="text-gray-700 flex justify-between">
+                  <span className="font-medium">Name:</span>
+                  <span>{user?.profile?.name || 'N/A'}</span>
+                </p>
+                <p className="text-gray-700 flex justify-between">
+                  <span className="font-medium">Email:</span>
+                  <span>{user?.email}</span>
+                </p>
+                <p className="text-gray-700 flex justify-between">
+                  <span className="font-medium">Company:</span>
+                  <span>{user?.profile?.company || 'N/A'}</span>
+                </p>
+                <p className="text-gray-700 flex justify-between items-center">
+                  <span className="font-medium">Status:</span>
+                  <span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${
+                    user?.profile?.account_status === 'active'
+                      ? 'bg-green-100 text-green-800'
+                      : 'bg-yellow-100 text-yellow-800'
+                  }`}>
+                    {user?.profile?.account_status
+                      ? user.profile.account_status.charAt(0).toUpperCase() + user.profile.account_status.slice(1)
+                      : 'Pending'}
+                  </span>
+                </p>
               </div>
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900">Document Statistics</h3>
-                <div className="mt-4 space-y-2">
-                  <p className="text-gray-600">
-                    <span className="font-medium">Total Documents:</span> {totalDocuments}
-                  </p>
-                  <p className="text-gray-600">
-                    <span className="font-medium">Verified:</span> {verifiedDocuments}
-                  </p>
-                  <p className="text-gray-600">
-                    <span className="font-medium">Pending:</span> {pendingDocuments}
-                  </p>
-                  <p className="text-gray-600">
-                    <span className="font-medium">Rejected:</span> {rejectedDocuments}
-                  </p>
-                </div>
-              </div>
-                </div>
-                    </div>
-
-          {/* Cars Overview */}
-          <div className="bg-white rounded-lg shadow-sm p-6">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-2xl font-bold text-blue-900">Your Cars</h2>
-              <Link
-                href="/portal/dashboard/documents"
-                onClick={handleActionClick}
-                className="px-4 py-2 bg-blue-900 text-white rounded-md hover:bg-blue-800"
-              >
-                Manage Documents
-              </Link>
-                    </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {cars.map((car) => (
-                <Link
-                  key={car.id}
-                  href={`/portal/dashboard/documents/${car.id}`}
-                  onClick={handleActionClick}
-                  className="p-4 rounded-lg border border-gray-200 hover:border-blue-900 hover:bg-blue-50 transition-colors duration-200"
-                >
-                  <h3 className="font-medium text-gray-900">Chassis Number</h3>
-                  <p className="text-gray-600">{car.chassis_number}</p>
-                  <div className="mt-2 text-sm text-gray-500">
-                    {documents.filter(doc => doc.car_id === car.id).length} documents
-                  </div>
-                </Link>
-              ))}
             </div>
-            {cars.length === 0 && (
-              <div className="text-center py-8">
-                <p className="text-gray-500">No cars added yet</p>
-                <Link
-                  href="/portal/dashboard/documents"
-                  onClick={handleActionClick}
-                  className="mt-4 inline-block px-4 py-2 bg-blue-900 text-white rounded-md hover:bg-blue-800"
-                >
-                  Add Your First Car
-                </Link>
-                </div>
-              )}
-                    </div>
-                    
-          {/* Quick Actions */}
-          <div className="bg-white rounded-lg shadow-sm p-6">
-            <h2 className="text-2xl font-bold text-blue-900 mb-4">Quick Actions</h2>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <Link
-                href="/portal/dashboard/documents"
-                onClick={handleActionClick}
-                className="p-4 rounded-lg border border-gray-200 hover:border-blue-900 hover:bg-blue-50 transition-colors duration-200 text-center"
-              >
-                <svg className="w-8 h-8 mx-auto text-blue-900" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                </svg>
-                <p className="mt-2 font-medium text-gray-900">Manage Documents</p>
-              </Link>
-              <Link
-                href="/portal/dashboard/profile"
-                className="p-4 rounded-lg border border-gray-200 hover:border-blue-900 hover:bg-blue-50 transition-colors duration-200 text-center"
-              >
-                <svg className="w-8 h-8 mx-auto text-blue-900" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                </svg>
-                <p className="mt-2 font-medium text-gray-900">Profile Settings</p>
-              </Link>
-              <Link
-                href="/portal/dashboard/status"
-                className="p-4 rounded-lg border border-gray-200 hover:border-blue-900 hover:bg-blue-50 transition-colors duration-200 text-center"
-              >
-                <svg className="w-8 h-8 mx-auto text-blue-900" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                                        </svg>
-                <p className="mt-2 font-medium text-gray-900">Check Status</p>
-              </Link>
-                                  </div>
-                                </div>
-                              </div>
-      </main>
-
-      {/* Account Activation Modal */}
-      {showModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-            <div className="flex justify-between items-start mb-4">
-              <h3 className="text-xl font-semibold text-gray-900">Account Activation Required</h3>
-                                        <button 
-                onClick={() => setShowModal(false)}
-                className="text-gray-400 hover:text-gray-500"
-                                        >
-                <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-                </svg>
-                                        </button>
-                                      </div>
-            <p className="text-gray-600 mb-4">
-              You need to activate your account before you can access this area. Please complete your account activation process.
-            </p>
-            <div className="flex justify-end space-x-4">
-                                <button
-                onClick={() => setShowModal(false)}
-                className="px-4 py-2 text-gray-600 hover:text-gray-800"
-                                >
-                Close
-                                </button>
-              <Link
-                href="/portal/dashboard/status"
-                className="px-4 py-2 bg-blue-900 text-white rounded-md hover:bg-blue-800"
-              >
-                Check Activation Status
-              </Link>
+            <div className="bg-gray-50 p-4 rounded-md">
+               <h3 className="text-lg font-semibold text-gray-900 mb-3">Vehicle Status</h3>
+               <div className="space-y-2 text-sm">
+                 <p className="text-gray-700 flex justify-between">
+                   <span className="font-medium">Total Vehicles:</span> {vehicleStats.total}
+                 </p>
+                 <p className="text-green-700 flex justify-between">
+                   <span className="font-medium">Approved:</span> {vehicleStats.approved}
+                 </p>
+                 <p className="text-yellow-700 flex justify-between">
+                   <span className="font-medium">Pending Review:</span> {vehicleStats.pending}
+                 </p>
+                 <p className="text-red-700 flex justify-between">
+                   <span className="font-medium">Rejected:</span> {vehicleStats.rejected}
+                 </p>
+                 <p className="text-gray-700 flex justify-between">
+                   <span className="font-medium">Draft:</span> {vehicleStats.draft}
+                 </p>
+               </div>
             </div>
+            <div className="bg-gray-50 p-4 rounded-md">
+               <h3 className="text-lg font-semibold text-gray-900 mb-3">Invoice Overview</h3>
+               <div className="space-y-2 text-sm">
+                 <p className="text-gray-700 flex justify-between">
+                   <span className="font-medium">Total Invoices:</span> {invoiceStats.total}
+                 </p>
+                 <p className="text-green-700 flex justify-between">
+                   <span className="font-medium">Issued:</span> {invoiceStats.issued}
+                 </p>
+                 <p className="text-yellow-700 flex justify-between">
+                   <span className="font-medium">Requested:</span> {invoiceStats.requested}
+                 </p>
+               </div>
+             </div>
           </div>
         </div>
-      )}
+
+        <div className="bg-white rounded-lg shadow-md p-6">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-2">
+            <h2 className="text-2xl font-bold text-blue-900">My Vehicles</h2>
+            <Link
+              href="/portal/dashboard/vehicles"
+              className="inline-flex items-center px-4 py-2 bg-blue-900 text-white text-sm font-medium rounded-md hover:bg-blue-800 transition-colors duration-200"
+            >
+              <TruckIcon className="h-5 w-5 mr-2"/>
+              Manage Vehicles
+            </Link>
+          </div>
+          <div className="space-y-4">
+            {vehicles.map((vehicle) => (
+              <Link
+                key={vehicle.id}
+                href={`/portal/dashboard/vehicles/${vehicle.id}`}
+                className="block p-4 rounded-lg border border-gray-200 hover:border-blue-600 hover:bg-blue-50 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50"
+              >
+                <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-2">
+                   <div>
+                      <h3 className="font-semibold text-gray-900 text-lg">Chassis: {vehicle.chassis_number}</h3>
+                      <p className="text-sm text-gray-600">{vehicle.make} {vehicle.model}</p>
+                   </div>
+                   <div className="flex items-center space-x-2 mt-2 sm:mt-0 text-xs">
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full font-medium ${getStatusBadgeClass(vehicle.status)}`}>
+                         {getStatusIcon(vehicle.status)}
+                         {vehicle.status.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                      </span>
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full font-medium bg-gray-100 text-gray-800">
+                        {getDocumentCount(vehicle)} / 3 Docs
+                      </span>
+                   </div>
+                 </div>
+              </Link>
+            ))}
+          </div>
+          {vehicles.length === 0 && (
+            <div className="text-center py-12 border-t mt-6">
+              <TruckIcon className="mx-auto h-12 w-12 text-gray-400" />
+              <p className="mt-4 text-lg font-medium text-gray-600">No vehicles added yet.</p>
+              <p className="mt-1 text-sm text-gray-500">Add your first vehicle to start the document process.</p>
+              <Link
+                href="/portal/dashboard/vehicles"
+                className="mt-6 inline-flex items-center px-4 py-2 bg-blue-900 text-white text-sm font-medium rounded-md hover:bg-blue-800 transition-colors duration-200"
+              >
+                Add First Vehicle
+              </Link>
+            </div>
+          )}
+        </div>
+
+        <div className="bg-white rounded-lg shadow-md p-6">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-2">
+            <h2 className="text-2xl font-bold text-blue-900">My Invoices</h2>
+            <Link
+              href="/portal/dashboard/invoices/my-invoices"
+              className="inline-flex items-center px-4 py-2 bg-blue-900 text-white text-sm font-medium rounded-md hover:bg-blue-800 transition-colors duration-200"
+            >
+              <CurrencyDollarIcon className="h-5 w-5 mr-2"/>
+              View All Invoices
+            </Link>
+          </div>
+          <div className="space-y-4">
+            {invoices.map((invoice) => (
+              <Link
+                key={invoice.id}
+                href={`/portal/dashboard/invoices/my-invoices`}
+                className="block p-4 rounded-lg border border-gray-200 hover:border-blue-600 hover:bg-blue-50 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50"
+              >
+                <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-2">
+                   <div>
+                      <h3 className="font-semibold text-gray-900 text-lg">
+                        Vehicle: {invoice.vehicles?.chassis_number}
+                      </h3>
+                      <p className="text-sm text-gray-600">
+                        Requested: {new Date(invoice.request_date).toLocaleDateString()}
+                      </p>
+                   </div>
+                   <div className="flex items-center space-x-2 mt-2 sm:mt-0 text-xs">
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full font-medium ${getStatusBadgeClass(invoice.status)}`}>
+                         {getStatusIcon(invoice.status)}
+                         {invoice.status.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                      </span>
+                   </div>
+                 </div>
+              </Link>
+            ))}
+          </div>
+          {invoices.length === 0 && (
+            <div className="text-center py-12 border-t mt-6">
+              <CurrencyDollarIcon className="mx-auto h-12 w-12 text-gray-400" />
+              <p className="mt-4 text-lg font-medium text-gray-600">No invoices found.</p>
+              <p className="mt-1 text-sm text-gray-500">Invoices will appear once they are issued for your approved vehicles.</p>
+            </div>
+          )}
+        </div>
+
+        <div className="bg-white rounded-lg shadow-md p-6">
+          <h2 className="text-2xl font-bold text-blue-900 mb-4">Quick Actions</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+            <Link
+              href="/portal/dashboard/vehicles"
+              className="group p-4 rounded-lg border border-gray-200 hover:border-blue-600 hover:bg-blue-50 transition-all duration-200 text-center flex flex-col items-center justify-center h-32"
+            >
+              <TruckIcon className="w-8 h-8 mx-auto text-blue-900 group-hover:scale-110 transition-transform" />
+              <p className="mt-2 font-medium text-gray-900">Manage Vehicles</p>
+            </Link>
+            <Link
+              href="/portal/dashboard/profile"
+              className="group p-4 rounded-lg border border-gray-200 hover:border-blue-600 hover:bg-blue-50 transition-all duration-200 text-center flex flex-col items-center justify-center h-32"
+            >
+              <UserCircleIcon className="w-8 h-8 mx-auto text-blue-900 group-hover:scale-110 transition-transform" />
+              <p className="mt-2 font-medium text-gray-900">Profile Settings</p>
+            </Link>
+            <Link
+              href="/portal/dashboard/invoices/my-invoices"
+              className="group p-4 rounded-lg border border-gray-200 hover:border-blue-600 hover:bg-blue-50 transition-all duration-200 text-center flex flex-col items-center justify-center h-32"
+            >
+              <CurrencyDollarIcon className="w-8 h-8 mx-auto text-blue-900 group-hover:scale-110 transition-transform" />
+              <p className="mt-2 font-medium text-gray-900">View Invoices</p>
+            </Link>
+          </div>
+        </div>
+      </div>
     </div>
   );
 } 

@@ -39,7 +39,7 @@ export default function Navbar() {
   };
 
   return (
-    <header className={`fixed top-0 left-0 w-full z-50 transition-all duration-500 bg-white shadow-md`}>
+    <header className={`fixed top-0 left-0 w-full z-50 transition-all duration-500 ${scrolled ? 'bg-white shadow-md' : 'bg-white bg-opacity-95'}`}>
       <div className="container mx-auto px-4 py-2">
         <div className="flex items-center justify-between">
           {/* Logo */}
@@ -50,7 +50,7 @@ export default function Navbar() {
             onMouseLeave={() => setIsHovered(false)}
           >
             <div className="relative w-16 h-16 mr-4">
-              <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full opacity-0 group-hover:opacity-20 transition-opacity duration-300"></div>
+              <div className="absolute inset-0 bg-gradient-to-r from-[var(--primary)] to-[var(--accent)] rounded-full opacity-0 group-hover:opacity-20 transition-opacity duration-300"></div>
               <Image
                 src="/logo.png"
                 alt="SSA Logistics Logo"
@@ -76,17 +76,17 @@ export default function Navbar() {
               <Link 
                 key={item.path}
                 href={item.path}
-                className="font-medium relative overflow-hidden group text-gray-700"
+                className="font-medium relative overflow-hidden group text-[var(--text-dark)]"
               >
                 <span className={`smooth-transition flex items-center ${
-                  isActive(item.path) ? "text-blue-600" : "group-hover:text-blue-600"
+                  isActive(item.path) ? "text-[var(--primary)]" : "group-hover:text-[var(--primary)]"
                 }`}>
                   <svg className="w-4 h-4 mr-1 transform transition-transform group-hover:scale-110" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d={item.icon} />
                   </svg>
                   {item.name}
                 </span>
-                <span className={`absolute bottom-0 left-0 w-full h-0.5 transform origin-left transition-transform duration-300 bg-gradient-to-r from-blue-600 to-purple-600 ${
+                <span className={`absolute bottom-0 left-0 w-full h-0.5 transform origin-left transition-transform duration-300 bg-[var(--primary)] ${
                   isActive(item.path) ? "scale-x-100" : "scale-x-0 group-hover:scale-x-100"
                 }`}></span>
               </Link>
@@ -98,11 +98,11 @@ export default function Navbar() {
             <Link 
               href="/portal" 
               className={`relative inline-flex items-center px-6 py-2 rounded-md text-white transition group overflow-hidden ${
-                isActive("/portal") ? "ring-2 ring-blue-400" : ""
+                isActive("/portal") ? "ring-2 ring-[var(--primary-light)]" : ""
               }`}
             >
-              <span className="absolute inset-0 bg-gradient-to-r from-blue-600 to-blue-800"></span>
-              <span className="absolute inset-0 bg-gradient-to-r from-blue-700 to-blue-900 opacity-0 transition-opacity duration-300 group-hover:opacity-100"></span>
+              <span className="absolute inset-0 bg-[var(--primary)]"></span>
+              <span className="absolute inset-0 bg-[var(--primary-light)] opacity-0 transition-opacity duration-300 group-hover:opacity-100"></span>
               <span className="relative flex items-center">
                 <svg className="w-4 h-4 mr-2 transform transition-transform group-hover:rotate-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
@@ -114,7 +114,7 @@ export default function Navbar() {
 
           {/* Mobile Menu Button */}
           <button
-            className="md:hidden focus:outline-none transition-colors duration-300 text-gray-700"
+            className="md:hidden focus:outline-none transition-colors duration-300 text-[var(--text-dark)]"
             onClick={toggleMobileMenu}
             aria-label="Toggle menu"
           >
@@ -147,8 +147,8 @@ export default function Navbar() {
               <Link
                 key={item.path}
                 href={item.path}
-                className={`block text-gray-700 hover:text-blue-600 font-medium relative group ${
-                  isActive(item.path) ? "text-blue-600" : ""
+                className={`block text-[var(--text-dark)] hover:text-[var(--primary)] font-medium relative group ${
+                  isActive(item.path) ? "text-[var(--primary)]" : ""
                 }`}
                 onClick={() => setIsMobileMenuOpen(false)}
               >
@@ -158,7 +158,7 @@ export default function Navbar() {
                   </svg>
                   {item.name}
                 </span>
-                <span className={`absolute bottom-0 left-0 h-0.5 bg-blue-600 transition-all duration-300 ${
+                <span className={`absolute bottom-0 left-0 h-0.5 bg-[var(--primary)] transition-all duration-300 ${
                   isActive(item.path) ? "w-full" : "w-0 group-hover:w-full"
                 }`}></span>
               </Link>
@@ -166,12 +166,12 @@ export default function Navbar() {
             <Link
               href="/portal"
               className={`relative inline-flex items-center justify-center w-full px-4 py-2 rounded-md text-white transition group overflow-hidden ${
-                isActive("/portal") ? "ring-2 ring-blue-400" : ""
+                isActive("/portal") ? "ring-2 ring-[var(--primary-light)]" : ""
               }`}
               onClick={() => setIsMobileMenuOpen(false)}
             >
-              <span className="absolute inset-0 bg-gradient-to-r from-blue-600 to-blue-800"></span>
-              <span className="absolute inset-0 bg-gradient-to-r from-blue-700 to-blue-900 opacity-0 transition-opacity duration-300 group-hover:opacity-100"></span>
+              <span className="absolute inset-0 bg-[var(--primary)]"></span>
+              <span className="absolute inset-0 bg-[var(--primary-light)] opacity-0 transition-opacity duration-300 group-hover:opacity-100"></span>
               <span className="relative flex items-center">
                 <svg className="w-4 h-4 mr-2 transform transition-transform group-hover:rotate-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>

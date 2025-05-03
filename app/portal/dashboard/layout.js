@@ -3,6 +3,18 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
+import {
+    HomeIcon,
+    TruckIcon,
+    UserCircleIcon,
+    DocumentTextIcon, // Main Invoice Icon
+    ArrowLeftOnRectangleIcon,
+    Bars3Icon,
+    XMarkIcon,
+    ChevronDownIcon, // For expanding menu
+    DocumentDuplicateIcon, // For My Invoices
+    PlusCircleIcon // For Request Invoice
+ } from '@heroicons/react/24/outline';
 
 export default function DashboardLayout({ children }) {
   const router = useRouter();
@@ -10,17 +22,22 @@ export default function DashboardLayout({ children }) {
   const [user, setUser] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isInvoiceOpen, setIsInvoiceOpen] = useState(false); // State for invoice menu
+
+  useEffect(() => {
+    // Reset invoice menu state on route change if needed, or keep it open
+    // setIsInvoiceOpen(false);
+  }, [pathname]);
 
   useEffect(() => {
     const checkUser = async () => {
-      // Skip auth check if we're logging out
       if (isLoggingOut) return;
-
+      setIsLoading(true); // Ensure loading state is true at the start
       try {
         const { data: { user }, error } = await supabase.auth.getUser();
-        
-        // If there's no user or error, redirect to portal
         if (error || !user) {
+          console.error('Auth error:', error?.message || 'No user found');
           router.push('/portal');
           return;
         }
@@ -32,14 +49,14 @@ export default function DashboardLayout({ children }) {
           .single();
 
         if (profileError) {
-          console.error('Profile fetch error:', profileError);
-          router.push('/portal');
-          return;
+          console.warn('Profile fetch warning:', profileError.message); // Warn instead of error
+          setUser({ ...user, profile: null }); // Allow access even if profile fails
+        } else {
+          setUser({ ...user, profile });
         }
 
-        setUser({ ...user, profile });
       } catch (error) {
-        console.error('Auth check error:', error);
+        console.error('Auth check error:', error.message);
         router.push('/portal');
       } finally {
         setIsLoading(false);
@@ -54,162 +71,211 @@ export default function DashboardLayout({ children }) {
       if (!window.confirm('Are you sure you want to logout?')) {
         return;
       }
-
       setIsLoggingOut(true);
       setIsLoading(true);
-
       const { error } = await supabase.auth.signOut();
-      if (error) {
-        console.error('Error signing out:', error);
-        alert('Error signing out. Please try again.');
-        return;
-      }
-      
-      // Clear local state
+      if (error) throw error;
       setUser(null);
-      
-      // Use window.location instead of router to force a full page reload
       window.location.href = '/portal';
     } catch (error) {
       console.error('Error signing out:', error);
       alert('Error signing out. Please try again.');
-    } finally {
-      setIsLoading(false);
+      setIsLoading(false); // Reset loading states on error
       setIsLoggingOut(false);
     }
+    // No finally needed here as redirect happens on success
   };
 
-  // Show loading state
+  // Loading states
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-100">
+      <div className="h-screen w-screen flex items-center justify-center bg-white">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-900 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading...</p>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[var(--primary)] mx-auto"></div>
+          <p className="mt-4 text-[var(--text-dark)]">Loading...</p>
         </div>
       </div>
     );
   }
-
-  // If we're logging out, show a simple loading state
   if (isLoggingOut) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-100">
+      <div className="h-screen w-screen flex items-center justify-center bg-white">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-900 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Logging out...</p>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[var(--primary)] mx-auto"></div>
+          <p className="mt-4 text-[var(--text-dark)]">Logging out...</p>
         </div>
       </div>
     );
   }
 
-  const canAccessDocuments = user?.profile?.account_status === 'active';
+  const navigationItems = [
+    { name: 'Home', href: '/portal/dashboard', icon: HomeIcon },
+    { name: 'Vehicles', href: '/portal/dashboard/vehicles', icon: TruckIcon },
+    {
+        name: 'Invoices',
+        icon: DocumentTextIcon,
+        isOpen: isInvoiceOpen,
+        setIsOpen: setIsInvoiceOpen,
+        subItems: [
+            { name: 'My Invoices', href: '/portal/dashboard/invoices/my-invoices', icon: DocumentDuplicateIcon },
+            { name: 'Request Invoice', href: '/portal/dashboard/invoices/request', icon: PlusCircleIcon },
+        ]
+    },
+    { name: 'Profile', href: '/portal/dashboard/profile', icon: UserCircleIcon },
+  ];
 
   return (
-    <div className="min-h-screen bg-gray-100">
-      {/* Header */}
-      <header className="bg-white shadow-sm">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex justify-between items-center">
-            <h1 className="text-sm md:text-2xl font-bold text-blue-900">Document Portal Dashboard</h1>
-            <div className="flex items-center space-x-4">
-              <span className="text-sm md:text-base text-gray-600">Welcome, {user?.profile?.name || 'User'}</span>
-              <button 
-                onClick={handleLogout}
-                className="flex items-center px-4 py-2 text-sm font-medium text-white bg-blue-900 rounded-md hover:bg-blue-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-200"
-              >
-                <svg 
-                  className="w-4 h-4 mr-2" 
-                  fill="none" 
-                  stroke="currentColor" 
-                  viewBox="0 0 24 24"
+    // Added overflow-hidden to the root flex container to prevent scrollbars
+    <div className="min-h-screen flex bg-[var(--background-light)] overflow-hidden">
+      {/* Sidebar */}
+      <div className={`fixed inset-y-0 left-0 z-30 w-64 bg-[var(--background-dark)] text-white transform ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} transition-transform duration-300 ease-in-out md:relative md:translate-x-0 md:flex md:flex-col flex-shrink-0`}>
+        {/* Sidebar Header */}
+        <div className="flex items-center justify-between h-16 px-4 border-b border-[var(--primary-light)] md:justify-center flex-shrink-0">
+           <h1 className="text-xl font-bold">SSA Logistics</h1>
+           <button
+             onClick={() => setIsSidebarOpen(false)}
+             className="text-[var(--accent-light)] hover:text-white md:hidden"
+             aria-label="Close sidebar"
+           >
+             <XMarkIcon className="h-6 w-6" />
+           </button>
+        </div>
+        {/* Sidebar Navigation (Scrollable) */}
+        <nav className="flex-1 px-2 py-4 space-y-1 overflow-y-auto">
+          {navigationItems.map((item) => (
+            item.subItems ? (
+              // Render Expandable Menu Item
+              <div key={item.name}>
+                <button
+                  onClick={() => item.setIsOpen(!item.isOpen)}
+                  className={`group w-full flex items-center justify-between px-2 py-2 text-sm font-medium rounded-md ${ 
+                    pathname.startsWith('/portal/dashboard/invoices') // Highlight if path starts with /invoices
+                      ? 'bg-[var(--primary)] text-white' 
+                      : 'text-gray-100 hover:bg-[var(--primary-light)] hover:text-white'
+                  }`}
                 >
-                  <path 
-                    strokeLinecap="round" 
-                    strokeLinejoin="round" 
-                    strokeWidth="2" 
-                    d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" 
-                  />
-                </svg>
-                Logout
-              </button>
+                  <span className="flex items-center">
+                     <item.icon className="mr-3 flex-shrink-0 h-6 w-6 text-[var(--accent-light)]" aria-hidden="true" />
+                     {item.name}
+                  </span>
+                  <ChevronDownIcon className={`w-5 h-5 text-[var(--accent-light)] transform transition-transform duration-150 ${item.isOpen ? 'rotate-180' : ''}`} />
+                </button>
+                {/* Conditionally Render Sub Items */}
+                {item.isOpen && (
+                  <div className="mt-1 space-y-1 pl-5">
+                    {item.subItems.map((subItem) => (
+                      <Link
+                        key={subItem.name}
+                        href={subItem.href}
+                        onClick={() => setIsSidebarOpen(false)} // Close mobile sidebar on sub-item click
+                        className={`group flex items-center px-2 py-2 text-sm font-medium rounded-md ${ 
+                            pathname === subItem.href 
+                            ? 'bg-[var(--primary-light)] text-white' 
+                            : 'text-gray-200 hover:bg-[var(--primary-light)] hover:text-white' 
+                        }`}
+                      >
+                        <subItem.icon className="mr-3 flex-shrink-0 h-5 w-5 text-[var(--accent-light)]" aria-hidden="true" />
+                        {subItem.name}
+                      </Link>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ) : (
+              // Render Regular Link Item
+              <Link
+                key={item.name}
+                href={item.href}
+                onClick={() => setIsSidebarOpen(false)}
+                className={`group flex items-center px-2 py-2 text-sm font-medium rounded-md ${ 
+                    pathname === item.href 
+                    ? 'bg-[var(--primary)] text-white' 
+                    : 'text-gray-100 hover:bg-[var(--primary-light)] hover:text-white' 
+                }`}
+              >
+                <item.icon className="mr-3 flex-shrink-0 h-6 w-6 text-[var(--accent-light)]" aria-hidden="true" />
+                {item.name}
+              </Link>
+            )
+          ))}
+        </nav>
+         {/* Sidebar Footer */}
+         <div className="mt-auto p-4 border-t border-[var(--primary-light)] flex-shrink-0">
+           <button
+              onClick={handleLogout}
+              className="group w-full flex items-center px-2 py-2 text-sm font-medium rounded-md text-gray-100 hover:bg-[var(--primary-light)] hover:text-white"
+            >
+              <ArrowLeftOnRectangleIcon className="mr-3 flex-shrink-0 h-6 w-6 text-[var(--accent-light)]" aria-hidden="true" />
+              Logout
+           </button>
+         </div>
+      </div>
+
+       {/* Mobile overlay for sidebar */}
+       {isSidebarOpen && (
+         <div
+           className="fixed inset-0 z-20 bg-black bg-opacity-50 md:hidden"
+           onClick={() => setIsSidebarOpen(false)}
+           aria-hidden="true"
+         ></div>
+       )}
+
+      {/* Main Content Area */}
+      {/* flex-1 ensures it takes remaining space, overflow-hidden prevents its own scroll issues */}
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {/* Top Bar */}
+        <header className="bg-white shadow-sm sticky top-0 z-10 flex-shrink-0">
+          <div className="container mx-auto px-4 sm:px-6 lg:px-8 max-w-7xl"> {/* Added max-width */}
+            <div className="flex justify-between items-center h-16">
+               {/* Hamburger Menu Button - Mobile */}
+               <button
+                 onClick={() => setIsSidebarOpen(true)}
+                 className="text-[var(--text-dark)] hover:text-[var(--primary)] md:hidden"
+                 aria-label="Open sidebar"
+               >
+                 <Bars3Icon className="h-6 w-6" />
+               </button>
+
+              {/* Invisible placeholder to balance the hamburger menu */}
+               <div className="md:hidden">&nbsp;</div>
+
+              {/* User Info - Moved to top right */}
+              <div className="flex items-center">
+                <span className="text-sm md:text-base text-[var(--text-dark)] truncate px-2">
+                   Welcome, {user?.profile?.name || user?.email || 'User'}
+                </span>
+                {/* Logout Button - Hidden on Desktop, handled in sidebar */}
+                <button
+                  onClick={handleLogout}
+                  className="ml-2 flex-shrink-0 flex items-center px-3 py-1.5 text-sm font-medium text-white bg-[var(--primary)] rounded-md hover:bg-[var(--primary-light)] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[var(--primary-light)] transition-colors duration-200 md:hidden"
+                >
+                  Logout
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      </header>
+        </header>
 
-      {/* Navigation */}
-      <nav className="bg-white shadow-sm">
-        <div className="container mx-auto px-4">
-          <div className="flex space-x-8">
-            <Link
-              href="/portal/dashboard"
-              className={`py-4 px-1 border-b-2 font-medium text-sm ${
-                pathname === '/portal/dashboard'
-                  ? "border-blue-900 text-blue-900"
-                  : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
-              }`}
-            >
-              Home
-            </Link>
-            <Link
-              href="/portal/dashboard/documents"
-              className={`py-4 px-1 border-b-2 font-medium text-sm ${
-                pathname === '/portal/dashboard/documents'
-                  ? "border-blue-900 text-blue-900"
-                  : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
-              } ${
-                !canAccessDocuments 
-                  ? "opacity-50 cursor-not-allowed relative group" 
-                  : "cursor-pointer"
-              } whitespace-nowrap`}
-              onClick={(e) => {
-                if (!canAccessDocuments) {
-                  e.preventDefault();
-                }
-              }}
-            >
-              Documents
-              {!canAccessDocuments && (
-                <>
-                  <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800">
-                    Locked
-                  </span>
-                  <div className="absolute left-1/2 transform -translate-x-1/2 -bottom-24 w-52 bg-gray-800 text-white text-xs rounded py-2 px-3 shadow-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-10">
-                    <p className="text-center whitespace-normal">
-                      This section requires account activation first. Visit profile tab to activate.
-                    </p>
-                    <div className="absolute -top-1 left-1/2 transform -translate-x-1/2 w-2 h-2 bg-gray-800 rotate-45"></div>
-                  </div>
-                </>
-              )}
-            </Link>
-            <Link
-              href="/portal/dashboard/status"
-              className={`py-4 px-1 border-b-2 font-medium text-sm ${
-                pathname === '/portal/dashboard/status'
-                  ? "border-blue-900 text-blue-900"
-                  : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
-              }`}
-            >
-              Status
-            </Link>
-            <Link
-              href="/portal/dashboard/profile"
-              className={`py-4 px-1 border-b-2 font-medium text-sm ${
-                pathname === '/portal/dashboard/profile'
-                  ? "border-blue-900 text-blue-900"
-                  : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
-              }`}
-            >
-              Profile
-            </Link>
+        {/* This div must be scrollable to contain the main content */}
+        <main className="flex-1 overflow-y-auto bg-[var(--background-light)]">
+          {/* Content Container with padding and max-width */}
+          <div className="container mx-auto px-4 py-6 sm:px-6 lg:px-8 max-w-7xl">
+            {children}
           </div>
-        </div>
-      </nav>
+        </main>
 
-      {/* Main Content */}
-      {children}
+        {/* Footer - Optional */}
+        <footer className="bg-white border-t border-[var(--background-light)] py-4 px-4 flex-shrink-0">
+          <div className="container mx-auto flex justify-between items-center text-sm text-[var(--text-dark)] max-w-7xl">
+            <p>© {new Date().getFullYear()} SSA Logistics</p>
+            <div className="flex space-x-4">
+              <Link href="/terms" className="hover:text-[var(--primary)]">Terms</Link>
+              <Link href="/privacy" className="hover:text-[var(--primary)]">Privacy</Link>
+              <Link href="/contact" className="hover:text-[var(--primary)]">Contact</Link>
+            </div>
+          </div>
+        </footer>
+      </div>
     </div>
   );
 } 

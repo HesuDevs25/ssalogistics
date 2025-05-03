@@ -33,6 +33,8 @@ export default function PortalPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [showResendButton, setShowResendButton] = useState(false);
   const [resendEmail, setResendEmail] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -222,17 +224,17 @@ export default function PortalPage() {
   return (
     <div className="min-h-screen">
       {/* Hero Section */}
-      <section className="relative bg-gradient-blue overflow-hidden">
+      <section className="relative bg-[var(--background-dark)] overflow-hidden">
         <div className="absolute inset-0 bg-mesh opacity-20"></div>
         <div className="absolute inset-0 bg-noise opacity-10"></div>
-        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-blue-900/20 to-blue-900/40"></div>
+        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-[var(--primary)]/20 to-[var(--primary)]/40"></div>
         
         {/* Animated floating elements */}
         <div className="absolute inset-0 overflow-hidden">
           {floatingElements.map((element, i) => (
             <div
               key={i}
-              className="absolute w-64 h-64 bg-blue-500/10 rounded-full blur-3xl"
+              className="absolute w-64 h-64 bg-[var(--primary)]/10 rounded-full blur-3xl"
               style={{
                 top: element.top,
                 left: element.left,
@@ -246,209 +248,303 @@ export default function PortalPage() {
         <div className="relative container mx-auto px-4 py-24">
           <div className="max-w-3xl">
             <h1 className="text-4xl md:text-5xl font-bold mb-6 gradient-text">Document Verification Portal</h1>
-            <p className="text-xl md:text-2xl text-gray-200">
-              Securely manage and track your vehicle importation documents
+            <p className="text-xl text-gray-200 mb-8">
+              Access our secure document verification system for vehicle logistics.
             </p>
           </div>
-        </div>
-      </section>
 
-      {/* Portal Login/Register Section */}
-      <section className="py-16 md:py-24 bg-gray-100 relative overflow-hidden">
-        <div className="absolute inset-0 bg-mesh opacity-5"></div>
-        <div className="container mx-auto px-4 relative">
-          <div className="max-w-lg mx-auto">
-            <div className="bg-white shadow-lg p-8 rounded-lg">
-              <div className="flex mb-6 border-b">
-                <button
-                  onClick={() => setIsLogin(true)}
-                  className={`pb-3 px-4 font-medium ${
-                    isLogin
-                      ? "text-blue-900 border-b-2 border-blue-900"
-                      : "text-gray-500 hover:text-gray-700"
-                  }`}
-                >
-                  Login
-                </button>
-                <button
-                  onClick={() => setIsLogin(false)}
-                  className={`pb-3 px-4 font-medium ${
-                    !isLogin
-                      ? "text-blue-900 border-b-2 border-blue-900"
-                      : "text-gray-500 hover:text-gray-700"
-                  }`}
-                >
-                  Register
-                </button>
+          {/* Auth Card */}
+          <div className="max-w-md mx-auto">
+            <div className="glass p-8 rounded-lg shadow-lg border border-white/20">
+              <div className="mb-6 flex justify-between items-center">
+                <h2 className="text-2xl font-bold text-white">
+                  {isLogin ? "Sign In" : "Register"}
+                </h2>
+                <div className="flex space-x-2">
+                  <button
+                    onClick={() => setIsLogin(true)}
+                    className={`px-3 py-1 rounded-md transition-colors ${
+                      isLogin
+                        ? "bg-[var(--primary)] text-white"
+                        : "text-gray-300 hover:bg-white/10"
+                    }`}
+                  >
+                    Login
+                  </button>
+                  <button
+                    onClick={() => setIsLogin(false)}
+                    className={`px-3 py-1 rounded-md transition-colors ${
+                      !isLogin
+                        ? "bg-[var(--primary)] text-white"
+                        : "text-gray-300 hover:bg-white/10"
+                    }`}
+                  >
+                    Register
+                  </button>
+                </div>
               </div>
 
-              <h2 className="text-2xl font-bold mb-6 text-blue-900">
-                {isLogin ? "Sign in to your account" : "Create a new account"}
-              </h2>
-
               {error && (
-                <div className="bg-red-100 text-red-700 p-4 rounded-md mb-6">
+                <div className="mb-4 p-3 bg-red-500/20 border border-red-500/50 rounded-md text-white">
                   {typeof error === 'string' ? error : error}
                 </div>
               )}
 
-              <form onSubmit={handleSubmit} className="space-y-6">
+              <form onSubmit={handleSubmit} className="space-y-4">
                 {!isLogin && (
                   <>
-                    {/* Name */}
                     <div>
                       <label
                         htmlFor="name"
-                        className="block text-sm font-medium text-gray-700 mb-1"
+                        className="block text-sm font-medium text-gray-200 mb-1"
                       >
-                        Full Name *
+                        Full Name
                       </label>
                       <input
                         type="text"
                         id="name"
                         name="name"
+                        required={!isLogin}
                         value={formData.name}
                         onChange={handleChange}
-                        required={!isLogin}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-600 focus:border-transparent transition-all duration-300 text-gray-900 placeholder-gray-500"
+                        className="w-full px-4 py-2 bg-white/10 border border-white/30 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[var(--primary-light)] focus:border-transparent"
+                        placeholder="Enter your full name"
                       />
                     </div>
-
-                    {/* Phone Number */}
                     <div>
                       <label
                         htmlFor="phoneNumber"
-                        className="block text-sm font-medium text-gray-700 mb-1"
+                        className="block text-sm font-medium text-gray-200 mb-1"
                       >
-                        Phone Number *
+                        Phone Number
                       </label>
                       <input
                         type="tel"
                         id="phoneNumber"
                         name="phoneNumber"
+                        required={!isLogin}
                         value={formData.phoneNumber}
                         onChange={handleChange}
-                        required={!isLogin}
-                        placeholder="e.g., +255 123 456 789"
-                        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-600 focus:border-transparent transition-all duration-300 text-gray-900 placeholder-gray-500"
+                        className="w-full px-4 py-2 bg-white/10 border border-white/30 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[var(--primary-light)] focus:border-transparent"
+                        placeholder="Enter your phone number"
                       />
                     </div>
                   </>
                 )}
 
-                {/* Email */}
                 <div>
                   <label
                     htmlFor="email"
-                    className="block text-sm font-medium text-gray-700 mb-1"
+                    className="block text-sm font-medium text-gray-200 mb-1"
                   >
-                    Email Address *
+                    Email Address
                   </label>
                   <input
                     type="email"
                     id="email"
                     name="email"
+                    required
                     value={formData.email}
                     onChange={handleChange}
-                    required
-                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-600 focus:border-transparent transition-all duration-300 text-gray-900 placeholder-gray-500"
+                    className="w-full px-4 py-2 bg-white/10 border border-white/30 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[var(--primary-light)] focus:border-transparent"
+                    placeholder="Enter your email"
                   />
                 </div>
 
-                {/* Password */}
                 <div>
                   <label
                     htmlFor="password"
-                    className="block text-sm font-medium text-gray-700 mb-1"
+                    className="block text-sm font-medium text-gray-200 mb-1"
                   >
-                    Password *
+                    Password
                   </label>
-                  <input
-                    type="password"
-                    id="password"
-                    name="password"
-                    value={formData.password}
-                    onChange={handleChange}
-                    required
-                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-600 focus:border-transparent transition-all duration-300 text-gray-900 placeholder-gray-500"
-                  />
+                  <div className="relative">
+                    <input
+                      type={showPassword ? "text" : "password"}
+                      id="password"
+                      name="password"
+                      required
+                      value={formData.password}
+                      onChange={handleChange}
+                      className="w-full px-4 py-2 bg-white/10 border border-white/30 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[var(--primary-light)] focus:border-transparent"
+                      placeholder="Enter your password"
+                    />
+                    <button
+                      type="button"
+                      className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400"
+                      onClick={() => setShowPassword(!showPassword)}
+                    >
+                      {showPassword ? (
+                        <svg
+                          className="h-5 w-5"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth="2"
+                            d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"
+                          />
+                        </svg>
+                      ) : (
+                        <svg
+                          className="h-5 w-5"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth="2"
+                            d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                          />
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth="2"
+                            d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
+                          />
+                        </svg>
+                      )}
+                    </button>
+                  </div>
                 </div>
 
                 {!isLogin && (
                   <div>
                     <label
                       htmlFor="confirmPassword"
-                      className="block text-sm font-medium text-gray-700 mb-1"
+                      className="block text-sm font-medium text-gray-200 mb-1"
                     >
-                      Confirm Password *
+                      Confirm Password
                     </label>
-                    <input
-                      type="password"
-                      id="confirmPassword"
-                      name="confirmPassword"
-                      value={formData.confirmPassword}
-                      onChange={handleChange}
-                      required={!isLogin}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-600 focus:border-transparent transition-all duration-300 text-gray-900 placeholder-gray-500"
-                    />
+                    <div className="relative">
+                      <input
+                        type={showConfirmPassword ? "text" : "password"}
+                        id="confirmPassword"
+                        name="confirmPassword"
+                        required={!isLogin}
+                        value={formData.confirmPassword}
+                        onChange={handleChange}
+                        className="w-full px-4 py-2 bg-white/10 border border-white/30 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[var(--primary-light)] focus:border-transparent"
+                        placeholder="Confirm your password"
+                      />
+                      <button
+                        type="button"
+                        className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400"
+                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                      >
+                        {showConfirmPassword ? (
+                          <svg
+                            className="h-5 w-5"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth="2"
+                              d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"
+                            />
+                          </svg>
+                        ) : (
+                          <svg
+                            className="h-5 w-5"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth="2"
+                              d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                            />
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth="2"
+                              d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
+                            />
+                          </svg>
+                        )}
+                      </button>
+                    </div>
                   </div>
                 )}
 
                 {isLogin && (
-                  <div className="flex justify-between items-center">
+                  <div className="flex items-center justify-between">
                     <div className="flex items-center">
                       <input
                         id="remember-me"
                         name="remember-me"
                         type="checkbox"
-                        className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                        className="h-4 w-4 text-[var(--primary)] focus:ring-[var(--primary-light)] border-gray-300 rounded"
                       />
                       <label
                         htmlFor="remember-me"
-                        className="ml-2 block text-sm text-gray-700"
+                        className="ml-2 block text-sm text-gray-200"
                       >
                         Remember me
                       </label>
                     </div>
 
                     <div className="text-sm">
-                      <a href="#" className="text-blue-900 hover:underline">
-                        Forgot your password?
-                      </a>
+                      <Link
+                        href="/portal/reset-password"
+                        className="font-medium text-[var(--accent-light)] hover:text-white"
+                      >
+                        Forgot password?
+                      </Link>
                     </div>
                   </div>
                 )}
 
-                <button
-                  type="submit"
-                  disabled={isLoading}
-                  className="relative overflow-hidden btn-glow text-white px-8 py-3 rounded-md transition group w-full"
-                >
-                  <span className="absolute inset-0 bg-gradient-to-r from-blue-600 to-blue-800 rounded-md z-0"></span>
-                  <span className="relative z-10 flex items-center justify-center">
-                    {isLoading ? (
-                      <div className="flex items-center">
-                        <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent mr-2"></div>
-                        <span>Processing...</span>
-                      </div>
-                    ) : isLogin ? (
-                      "Sign In"
-                    ) : (
-                      "Create Account"
-                    )}
-                  </span>
-                </button>
+                <div>
+                  <button
+                    type="submit"
+                    disabled={isLoading}
+                    className="w-full relative overflow-hidden btn-glow text-white py-2 px-4 rounded-md transition-colors disabled:opacity-70"
+                  >
+                    <span className="absolute inset-0 bg-gradient-to-r from-[var(--primary)] to-[var(--accent)] rounded-md z-0"></span>
+                    <span className="relative z-10">
+                      {isLoading
+                        ? "Processing..."
+                        : isLogin
+                        ? "Sign In"
+                        : "Create Account"}
+                    </span>
+                  </button>
+                </div>
               </form>
 
-              <div className="mt-6 text-center">
-                <button
-                  onClick={toggleForm}
-                  className="text-blue-900 hover:underline focus:outline-none"
-                >
-                  {isLogin
-                    ? "Need an account? Register here"
-                    : "Already have an account? Sign in"}
-                </button>
+              <div className="mt-6 text-center text-sm text-gray-200">
+                {isLogin ? (
+                  <>
+                    Don&apos;t have an account?{" "}
+                    <button
+                      onClick={toggleForm}
+                      className="font-medium text-[var(--accent-light)] hover:text-white transition-colors"
+                    >
+                      Register now
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    Already have an account?{" "}
+                    <button
+                      onClick={toggleForm}
+                      className="font-medium text-[var(--accent-light)] hover:text-white transition-colors"
+                    >
+                      Sign in
+                    </button>
+                  </>
+                )}
               </div>
             </div>
           </div>

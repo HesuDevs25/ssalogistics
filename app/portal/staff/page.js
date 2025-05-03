@@ -9,6 +9,7 @@ export default function StaffDashboard() {
   const [activeTab, setActiveTab] = useState("activationRequests");
   const [isLoading, setIsLoading] = useState(true);
   const [users, setUsers] = useState([]);
+  const [documents, setDocuments] = useState([]);
   const [activationRequests, setActivationRequests] = useState([]);
   const [staff, setStaff] = useState(null);
   const [rejectReason, setRejectReason] = useState("");
@@ -16,12 +17,12 @@ export default function StaffDashboard() {
   const [selectedRequest, setSelectedRequest] = useState(null);
   const [stats, setStats] = useState({
     totalAgents: 0,
-    verifiedDocs: 0,
-    pendingDocs: 0,
+    approvedVehicles: 0,
+    pendingVehicles: 0,
     pendingActivations: 0,
-    rejectedDocs: 0
+    rejectedVehicles: 0
   });
-  const [recentActivities, setRecentActivities] = useState([]);
+  const [recentActivity, setRecentActivity] = useState([]);
 
   // Check if user is staff
   useEffect(() => {
@@ -50,6 +51,7 @@ export default function StaffDashboard() {
 
         setStaff(profile);
         await fetchUsers();
+        await fetchDocuments();
         await fetchActivationRequests();
         await fetchDashboardData();
       } catch (error) {
@@ -78,6 +80,24 @@ export default function StaffDashboard() {
       setUsers(data || []);
     } catch (error) {
       console.error('Error fetching users:', error);
+    }
+  };
+
+  const fetchDocuments = async () => {
+    try {
+      const { data, error } = await supabaseAdmin
+        .from('documents')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Error fetching documents:', error);
+        return;
+      }
+
+      setDocuments(data || []);
+    } catch (error) {
+      console.error('Error fetching documents:', error);
     }
   };
 
@@ -111,51 +131,81 @@ export default function StaffDashboard() {
     try {
       setIsLoading(true);
 
-      // Fetch data first, then count
+      // Fetch stats using supabaseAdmin for admin privileges
       const [
-        { data: customers },
-        { data: verifiedDocs },
-        { data: pendingDocs },
-        { data: pendingActivations },
-        { data: rejectedDocs },
-        { data: activities }
+        { count: totalAgentsCount, error: agentsError },
+        { count: approvedVehiclesCount, error: approvedError },
+        { count: pendingVehiclesCount, error: pendingError },
+        { count: pendingActivationsCount, error: activationsError },
+        { count: rejectedVehiclesCount, error: rejectedError }
       ] = await Promise.all([
-        supabaseAdmin.from('profiles').select('*').eq('role', 'customer'),
-        supabaseAdmin.from('documents').select('*').eq('status', 'verified'),
-        supabaseAdmin.from('documents').select('*').eq('status', 'pending'),
-        supabaseAdmin.from('account_activation_requests').select('*').eq('status', 'pending'),
-        supabaseAdmin.from('documents').select('*').eq('status', 'rejected'),
+        // Only count customers with account_status 'active'
         supabaseAdmin
-          .from('documents')
-          .select(`
-            *,
-            profiles:user_id (
-              id,
-              name,
-              email,
-              role
-            )
-          `)
-          .eq('profiles.role', 'customer')
-          .order('created_at', { ascending: false })
-          .limit(5)
+          .from('profiles')
+          .select('id', { count: 'exact', head: true })
+          .eq('role', 'customer')
+          .eq('account_status', 'active'),
+        supabaseAdmin
+          .from('vehicles')
+          .select('id', { count: 'exact', head: true })
+          .eq('status', 'approved'),
+        supabaseAdmin
+          .from('vehicles')
+          .select('id', { count: 'exact', head: true })
+          .eq('status', 'pending'),
+        supabaseAdmin
+          .from('account_activation_requests')
+          .select('id', { count: 'exact', head: true })
+          .eq('status', 'pending'),
+        supabaseAdmin
+          .from('vehicles')
+          .select('id', { count: 'exact', head: true })
+          .eq('status', 'rejected')
       ]);
 
-      setStats({
-        totalAgents: customers?.length || 0,
-        verifiedDocs: verifiedDocs?.length || 0,
-        pendingDocs: pendingDocs?.length || 0,
-        pendingActivations: pendingActivations?.length || 0,
-        rejectedDocs: rejectedDocs?.length || 0
-      });
+      if (agentsError) console.error('Error fetching total agents:', agentsError);
+      if (approvedError) console.error('Error fetching approved vehicles:', approvedError);
+      if (pendingError) console.error('Error fetching pending vehicles:', pendingError);
+      if (activationsError) console.error('Error fetching pending activations:', activationsError);
+      if (rejectedError) console.error('Error fetching rejected vehicles:', rejectedError);
 
-      setRecentActivities(activities || []);
+      setStats({
+        totalAgents: totalAgentsCount ?? 0,
+        approvedVehicles: approvedVehiclesCount ?? 0,
+        pendingVehicles: pendingVehiclesCount ?? 0,
+        pendingActivations: pendingActivationsCount ?? 0,
+        rejectedVehicles: rejectedVehiclesCount ?? 0
+      });
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
     } finally {
       setIsLoading(false);
     }
   };
+
+  // Combine recent activity (documents + users) just like admin
+  useEffect(() => {
+    if (!users.length && !documents.length) return;
+
+    const recent = [
+      ...(documents.slice(0, 5).map(doc => ({
+        type: 'document',
+        action: 'uploaded',
+        user: users.find(u => u.id === doc.user_id)?.name || 'Unknown User',
+        details: doc.name,
+        timestamp: doc.created_at
+      })) || []),
+      ...(users.slice(0, 5).map(user => ({
+        type: 'user',
+        action: 'registered',
+        user: user.name,
+        details: user.email,
+        timestamp: user.created_at
+      })) || [])
+    ].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+    setRecentActivity(recent.slice(0, 3)); // Limit to only 5 latest
+  }, [users, documents]);
 
   const handleApproveRequest = async (requestId, userId) => {
     try {
@@ -201,6 +251,7 @@ export default function StaffDashboard() {
       // Refresh data
       await fetchActivationRequests();
       await fetchUsers();
+      await fetchDocuments();
 
       alert('Account activation approved successfully');
     } catch (error) {
@@ -273,44 +324,99 @@ export default function StaffDashboard() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="bg-white p-8 rounded-lg shadow-md">
-          <h2 className="text-xl font-semibold mb-4">Loading...</h2>
-          <div className="animate-pulse flex space-x-4">
-            <div className="flex-1 space-y-6 py-1">
-              <div className="h-2 bg-slate-200 rounded"></div>
-              <div className="space-y-3">
-                <div className="grid grid-cols-3 gap-4">
-                  <div className="h-2 bg-slate-200 rounded col-span-2"></div>
-                  <div className="h-2 bg-slate-200 rounded col-span-1"></div>
+      <div className="min-h-screen bg-gray-100 animate-pulse">
+        {/* Skeleton Header */}
+        <header className="bg-white shadow">
+          <div className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8 flex justify-between items-center">
+            <div className="h-6 w-1/3 bg-gray-200 rounded"></div>
+            <div className="h-9 w-24 bg-gray-200 rounded-md"></div>
+          </div>
+        </header>
+
+        <main className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
+          {/* Skeleton Stats Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+            {[...Array(4)].map((_, i) => (
+              <div key={i} className="bg-white rounded-lg shadow p-6">
+                <div className="flex items-center">
+                  <div className="h-12 w-12 bg-gray-200 rounded-full"></div>
+                  <div className="ml-4 flex-1 space-y-2">
+                    <div className="h-3 bg-gray-200 rounded w-3/4"></div>
+                    <div className="h-5 bg-gray-200 rounded w-1/2"></div>
+                  </div>
                 </div>
-                <div className="h-2 bg-slate-200 rounded"></div>
+              </div>
+            ))}
+          </div>
+          {/* Skeleton Recent Activities */}
+          <div className="bg-white shadow rounded-lg mb-8">
+            <div className="px-6 py-4 border-b border-gray-200">
+              <div className="h-5 w-1/4 bg-gray-200 rounded"></div>
+            </div>
+            <div className="divide-y divide-gray-200">
+              {[...Array(3)].map((_, i) => (
+                <div key={i} className="px-6 py-4">
+                  <div className="flex items-center">
+                    <div className="h-9 w-9 bg-gray-200 rounded-full"></div>
+                    <div className="ml-4 flex-1 space-y-1">
+                      <div className="h-3 bg-gray-200 rounded w-1/2"></div>
+                      <div className="h-3 bg-gray-200 rounded w-1/3"></div>
+                      <div className="h-2 bg-gray-200 rounded w-1/4 mt-1"></div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+          {/* Skeleton Tabs */}
+          <div className="border-b border-gray-200 mb-6">
+            <nav className="-mb-px flex space-x-8">
+              <div className="py-4 px-1 border-b-2 border-gray-300 w-32">
+                <div className="h-4 bg-gray-200 rounded w-full"></div>
+              </div>
+              <div className="py-4 px-1 border-b-2 border-transparent w-24">
+                <div className="h-4 bg-gray-200 rounded w-full"></div>
+              </div>
+            </nav>
+          </div>
+          {/* Skeleton Tab Content */}
+          <div>
+            <div className="h-6 w-1/3 bg-gray-200 rounded mb-4"></div>
+            <div className="bg-white shadow overflow-hidden rounded-md">
+              <div className="px-6 py-4 border-b border-gray-200">
+                <div className="h-3 bg-gray-200 rounded w-full"></div>
+              </div>
+              <div className="px-6 py-4 border-b border-gray-200">
+                <div className="h-3 bg-gray-200 rounded w-full"></div>
+              </div>
+              <div className="px-6 py-4">
+                <div className="h-3 bg-gray-200 rounded w-full"></div>
               </div>
             </div>
           </div>
-        </div>
+        </main>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-100">
-      <header className="bg-white shadow">
-        <div className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8 flex justify-between items-center">
-          <h1 className="text-2xl font-bold text-gray-900">Staff Dashboard</h1>
+    <div className="min-h-screen bg-gray-100 flex flex-col">
+      <header className="bg-white shadow w-full">
+        <div className="w-full py-6 flex justify-between items-center px-0">
+          <h1 className="text-2xl font-bold text-gray-900 ml-6">Dashboard</h1>
           <button
             onClick={async () => {
               await supabase.auth.signOut();
               router.push('/portal');
             }}
-            className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"
+            className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 mr-6"
           >
             Logout
           </button>
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+      <main className="flex-1 w-full py-6 px-0">
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
           {/* Total Customers Card */}
@@ -322,13 +428,12 @@ export default function StaffDashboard() {
                 </svg>
               </div>
               <div className="ml-4">
-                <p className="text-sm font-medium text-gray-500">Total Customers</p>
+                <p className="text-sm font-medium text-gray-500">Verified Agents</p>
                 <p className="text-2xl font-semibold text-gray-900">{stats.totalAgents}</p>
               </div>
             </div>
           </div>
-
-          {/* Pending Documents Card */}
+          {/* Pending Vehicles Card */}
           <div className="bg-white rounded-lg shadow p-6">
             <div className="flex items-center">
               <div className="p-3 rounded-full bg-yellow-100">
@@ -337,13 +442,12 @@ export default function StaffDashboard() {
                 </svg>
               </div>
               <div className="ml-4">
-                <p className="text-sm font-medium text-gray-500">Pending Documents</p>
-                <p className="text-2xl font-semibold text-gray-900">{stats.pendingDocs}</p>
+                <p className="text-sm font-medium text-gray-500">Pending Vehicles</p>
+                <p className="text-2xl font-semibold text-gray-900">{stats.pendingVehicles}</p>
               </div>
             </div>
           </div>
-
-          {/* Verified Documents Card */}
+          {/* Approved Vehicles Card */}
           <div className="bg-white rounded-lg shadow p-6">
             <div className="flex items-center">
               <div className="p-3 rounded-full bg-green-100">
@@ -352,12 +456,11 @@ export default function StaffDashboard() {
                 </svg>
               </div>
               <div className="ml-4">
-                <p className="text-sm font-medium text-gray-500">Verified Documents</p>
-                <p className="text-2xl font-semibold text-gray-900">{stats.verifiedDocs}</p>
+                <p className="text-sm font-medium text-gray-500">Approved Vehicles</p>
+                <p className="text-2xl font-semibold text-gray-900">{stats.approvedVehicles}</p>
               </div>
             </div>
           </div>
-
           {/* Pending Activations Card */}
           <div className="bg-white rounded-lg shadow p-6">
             <div className="flex items-center">
@@ -367,235 +470,222 @@ export default function StaffDashboard() {
                 </svg>
               </div>
               <div className="ml-4">
-                <p className="text-sm font-medium text-gray-500">Pending Activations</p>
+                <p className="text-sm font-medium text-gray-500">Pending Verifications</p>
                 <p className="text-2xl font-semibold text-gray-900">{stats.pendingActivations}</p>
               </div>
             </div>
           </div>
         </div>
 
-        {/* Recent Activities */}
+        {/* Recent Activity (copied from admin) */}
         <div className="bg-white shadow rounded-lg mb-8">
           <div className="px-6 py-4 border-b border-gray-200">
-            <h3 className="text-lg font-medium text-gray-900">Recent Activities</h3>
+            <h2 className="text-xl font-bold text-blue-900 mb-4">Recent Activity</h2>
           </div>
-          <div className="divide-y divide-gray-200">
-            {recentActivities.map((activity) => (
-              <div key={activity.id} className="px-6 py-4">
-                <div className="flex items-center">
-                  <div className={`p-2 rounded-full ${
-                    activity.status === 'verified' ? 'bg-green-100' :
-                    activity.status === 'pending' ? 'bg-yellow-100' :
-                    'bg-red-100'
-                  }`}>
-                    <svg className={`h-5 w-5 ${
-                      activity.status === 'verified' ? 'text-green-600' :
-                      activity.status === 'pending' ? 'text-yellow-600' :
-                      'text-red-600'
-                    }`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <div className="space-y-4 p-4">
+            {recentActivity.length > 0 ? recentActivity.map((activity, index) => (
+              <div key={index} className="flex items-center space-x-4 p-4 bg-gray-50 rounded-lg">
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                  activity.type === 'document' ? 'bg-blue-100' : 'bg-green-100'
+                }`}>
+                  <svg className={`w-4 h-4 ${
+                    activity.type === 'document' ? 'text-blue-600' : 'text-green-600'
+                  }`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    {activity.type === 'document' ? (
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                    </svg>
-                  </div>
-                  <div className="ml-4">
-                    <p className="text-sm font-medium text-gray-900">
-                      {activity.profiles?.name || 'Unknown User'} - {activity.document_type}
-                    </p>
-                    <p className="text-sm text-gray-500">
-                      Status: <span className={`font-medium ${
-                        activity.status === 'verified' ? 'text-green-600' :
-                        activity.status === 'pending' ? 'text-yellow-600' :
-                        'text-red-600'
-                      }`}>
-                        {activity.status.charAt(0).toUpperCase() + activity.status.slice(1)}
-                      </span>
-                    </p>
-                    <p className="text-xs text-gray-400 mt-1">
-                      {new Date(activity.created_at).toLocaleString()}
-                    </p>
-                  </div>
+                    ) : (
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                    )}
+                  </svg>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-900">
+                    {activity.user} {activity.action} {activity.type === 'document' ? 'a document' : 'an account'}
+                  </p>
+                  <p className="text-sm text-gray-500">{activity.details}</p>
+                </div>
+                <div className="ml-auto text-sm text-gray-500">
+                  {new Date(activity.timestamp).toLocaleDateString()}
                 </div>
               </div>
-            ))}
-            {recentActivities.length === 0 && (
-              <div className="px-6 py-4 text-center text-gray-500">
-                No recent activities found.
-              </div>
+            )) : (
+              <div className="text-center text-gray-500">No recent activities found.</div>
             )}
           </div>
         </div>
 
-          <div className="border-b border-gray-200 mb-6">
-            <nav className="-mb-px flex space-x-8">
-              <button
-                onClick={() => setActiveTab("activationRequests")}
-                className={`py-4 px-1 border-b-2 font-medium text-sm ${
-                  activeTab === "activationRequests"
-                    ? "border-blue-900 text-blue-900"
-                    : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
-                }`}
-              >
-                Activation Requests
-              </button>
-              <button
-                onClick={() => setActiveTab("agents")}
-                className={`py-4 px-1 border-b-2 font-medium text-sm ${
-                  activeTab === "agents"
-                    ? "border-blue-900 text-blue-900"
-                    : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
-                }`}
-              >
-              Customers
-              </button>
-            </nav>
-          </div>
+        <div className="border-b border-gray-200 mb-6">
+          <nav className="-mb-px flex space-x-8">
+            <button
+              onClick={() => setActiveTab("activationRequests")}
+              className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                activeTab === "activationRequests"
+                  ? "border-blue-900 text-blue-900"
+                  : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+              }`}
+            >
+              Activation Requests
+            </button>
+            <button
+              onClick={() => setActiveTab("agents")}
+              className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                activeTab === "agents"
+                  ? "border-blue-900 text-blue-900"
+                  : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+              }`}
+            >
+            Customers
+            </button>
+          </nav>
+        </div>
 
-          {activeTab === "activationRequests" && (
-            <div>
-              <h2 className="text-xl font-bold text-blue-900 mb-4">Account Activation Requests</h2>
-              
-              {activationRequests.length > 0 ? (
-                <div className="bg-white shadow overflow-hidden rounded-md">
-                  <ul className="divide-y divide-gray-200">
-                    {activationRequests.map((request) => (
-                      <li key={request.id} className="px-6 py-4">
-                        <div className="flex items-center justify-between">
-                          <div className="flex flex-col">
-                            <div className="flex items-center">
-                              <h3 className="text-lg font-medium text-gray-900">{request.profiles.name || 'Unknown'}</h3>
-                              <span className={`ml-2 px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                                request.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                                request.status === 'approved' ? 'bg-green-100 text-green-800' :
-                                'bg-red-100 text-red-800'
-                              }`}>
-                                {request.status.charAt(0).toUpperCase() + request.status.slice(1)}
-                              </span>
-                            </div>
-                            <p className="text-sm text-gray-500">Email: {request.profiles.email}</p>
-                            <p className="text-sm text-gray-500">Company: {request.company_name}</p>
-                            <p className="text-sm text-gray-500">Submitted: {new Date(request.created_at).toLocaleString()}</p>
-                            
-                            {request.status !== 'pending' && (
-                              <div className="mt-2 p-2 border border-gray-200 rounded bg-gray-50">
-                                <p className="text-sm font-medium text-gray-700">Review Notes:</p>
-                                <p className="text-sm text-gray-600">{request.notes || 'No notes provided'}</p>
-                                <p className="text-xs text-gray-500 mt-1">
-                                  Reviewed on {new Date(request.reviewed_at).toLocaleString()}
-                                </p>
-                              </div>
-                            )}
+        {activeTab === "activationRequests" && (
+          <div>
+            <h2 className="text-xl font-bold text-blue-900 mb-4">Account Activation Requests</h2>
+            
+            {activationRequests.length > 0 ? (
+              <div className="bg-white shadow overflow-hidden rounded-md">
+                <ul className="divide-y divide-gray-200">
+                  {activationRequests.map((request) => (
+                    <li key={request.id} className="px-6 py-4">
+                      <div className="flex items-center justify-between">
+                        <div className="flex flex-col">
+                          <div className="flex items-center">
+                            <h3 className="text-lg font-medium text-gray-900">{request.profiles.name || 'Unknown'}</h3>
+                            <span className={`ml-2 px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                              request.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                              request.status === 'approved' ? 'bg-green-100 text-green-800' :
+                              'bg-red-100 text-red-800'
+                            }`}>
+                              {request.status.charAt(0).toUpperCase() + request.status.slice(1)}
+                            </span>
                           </div>
+                          <p className="text-sm text-gray-500">Email: {request.profiles.email}</p>
+                          <p className="text-sm text-gray-500">Company: {request.company_name}</p>
+                          <p className="text-sm text-gray-500">Submitted: {new Date(request.created_at).toLocaleString()}</p>
                           
-                          {request.status === 'pending' && (
-                            <div className="flex space-x-2">
-                              <button
-                                onClick={() => viewDocuments(request)}
-                                className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700"
-                              >
-                                View Documents
-                              </button>
-                              <button
-                                onClick={() => handleApproveRequest(request.id, request.user_id)}
-                                className="px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700"
-                              >
-                                Approve
-                              </button>
-                              <button
-                                onClick={() => openRejectModal(request)}
-                                className="px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700"
-                              >
-                                Reject
-                              </button>
+                          {request.status !== 'pending' && (
+                            <div className="mt-2 p-2 border border-gray-200 rounded bg-gray-50">
+                              <p className="text-sm font-medium text-gray-700">Review Notes:</p>
+                              <p className="text-sm text-gray-600">{request.notes || 'No notes provided'}</p>
+                              <p className="text-xs text-gray-500 mt-1">
+                                Reviewed on {new Date(request.reviewed_at).toLocaleString()}
+                              </p>
                             </div>
                           )}
                         </div>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ) : (
-                <div className="bg-white p-4 rounded-lg text-center">
-                  <p className="text-gray-500">No activation requests found.</p>
-                </div>
-              )}
-            </div>
-          )}
-
-          {activeTab === "agents" && (
-            <div>
-            <h2 className="text-xl font-bold text-blue-900 mb-4">All Customers</h2>
-              
-              {users.length > 0 ? (
-                <div className="bg-white shadow overflow-hidden rounded-md">
-                  <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Name
-                        </th>
-                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Email
-                        </th>
-                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Phone
-                        </th>
-                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Status
-                        </th>
-                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Member Since
-                        </th>
-                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Actions
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
-                      {users.map((user) => (
-                        <tr key={user.id}>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="text-sm font-medium text-gray-900">{user.name || 'N/A'}</div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="text-sm text-gray-500">{user.email}</div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="text-sm text-gray-500">{user.phone || 'N/A'}</div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                              user.account_status === 'active' ? 'bg-green-100 text-green-800' :
-                              user.account_status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                              'bg-red-100 text-red-800'
-                            }`}>
-                              {user.account_status ? user.account_status.charAt(0).toUpperCase() + user.account_status.slice(1) : 'Disabled'}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                            {new Date(user.created_at).toLocaleDateString()}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                        
+                        {request.status === 'pending' && (
+                          <div className="flex space-x-2">
                             <button
-                              onClick={() => {
-                                // View user details or activate/deactivate 
-                                // Implementation for additional actions
-                              }}
-                              className="text-blue-600 hover:text-blue-900"
+                              onClick={() => viewDocuments(request)}
+                              className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700"
                             >
-                              View Details
+                              View Documents
                             </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              ) : (
-                <div className="bg-white p-4 rounded-lg text-center">
-                  <p className="text-gray-500">No users found.</p>
-                </div>
-              )}
-            </div>
-          )}
+                            <button
+                              onClick={() => handleApproveRequest(request.id, request.user_id)}
+                              className="px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700"
+                            >
+                              Approve
+                            </button>
+                            <button
+                              onClick={() => openRejectModal(request)}
+                              className="px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700"
+                            >
+                              Reject
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : (
+              <div className="bg-white p-4 rounded-lg text-center">
+                <p className="text-gray-500">No activation requests found.</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {activeTab === "agents" && (
+          <div>
+          <h2 className="text-xl font-bold text-blue-900 mb-4">All Customers</h2>
+            
+            {users.length > 0 ? (
+              <div className="bg-white shadow overflow-hidden rounded-md">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Name
+                      </th>
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Email
+                      </th>
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Phone
+                      </th>
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Status
+                      </th>
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Member Since
+                      </th>
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Actions
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {users.map((user) => (
+                      <tr key={user.id}>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm font-medium text-gray-900">{user.name || 'N/A'}</div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm text-gray-500">{user.email}</div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm text-gray-500">{user.phone || 'N/A'}</div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                            user.account_status === 'active' ? 'bg-green-100 text-green-800' :
+                            user.account_status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                            'bg-red-100 text-red-800'
+                          }`}>
+                            {user.account_status ? user.account_status.charAt(0).toUpperCase() + user.account_status.slice(1) : 'Disabled'}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          {new Date(user.created_at).toLocaleDateString()}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                          <button
+                            onClick={() => {
+                              // View user details or activate/deactivate 
+                              // Implementation for additional actions
+                            }}
+                            className="text-blue-600 hover:text-blue-900"
+                          >
+                            View Details
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="bg-white p-4 rounded-lg text-center">
+                <p className="text-gray-500">No users found.</p>
+              </div>
+            )}
+          </div>
+        )}
       </main>
 
       {/* Reject Modal */}
